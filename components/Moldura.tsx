@@ -64,21 +64,23 @@ export function Moldura({ papeis, children }: { papeis: Papel[]; children: (eu: 
   const { estado, sair, recarregar } = useSessao();
   const router = useRouter();
 
-  const semSessao = estado.fase === "sem_sessao";
+  // Sem sessão, ou com o segundo factor por confirmar: o ecrã de entrada trata disso.
+  const semSessao = estado.fase === "sem_sessao" || estado.fase === "codigo" || estado.fase === "activar_factor";
   const porConfigurar = estado.fase === "pronto" && !estado.eu.activo && estado.eu.gere_empresa;
   useEffect(() => {
     if (semSessao) router.replace("/entrar");
     else if (porConfigurar) router.replace("/configurar");
   }, [semSessao, porConfigurar, router]);
 
-  if (estado.fase === "a_carregar" || semSessao || porConfigurar) return <Carregar />;
   if (estado.fase === "erro") {
     return (
       <Aviso titulo="Não foi possível carregar" texto={estado.erro}>
         <button type="button" className="btn btn-primary" onClick={recarregar}>Tentar de novo</button>
+        <button type="button" className="btn btn-ghost" onClick={sair}>Sair</button>
       </Aviso>
     );
   }
+  if (estado.fase !== "pronto" || porConfigurar) return <Carregar />;
   const eu = estado.eu;
   if (!eu.company_id) {
     return (

@@ -6,9 +6,9 @@ Aplicação do restaurante para clientes do BOSS: sala e mesas, pedidos, ecrãs 
 
 | Parte | Onde | O que faz |
 | --- | --- | --- |
-| Aplicação | este repositório (Next.js, a publicar em `restaurante.boss.ao`) | Ecrãs da equipa e menu do cliente |
+| Aplicação | este repositório (Next.js, projecto Vercel `boss-restaurante`, em `rest.boss.ao`) | Ecrãs da equipa e menu do cliente |
 | Base de dados | esquema `restaurante` no projecto Supabase do BOSS; a migração vive no repositório `appbossao` (`supabase/migrations/20261230090000_restaurante.sql`) | Tabelas, regras de acesso e funções |
-| Login | o do BOSS (mesma conta, mesma palavra-passe) | A equipa entra com a conta BOSS; o cliente do restaurante nunca entra |
+| Login | o do BOSS (mesma conta, mesma palavra-passe, mesmo segundo factor) | A equipa entra com a conta BOSS; o cliente do restaurante nunca entra |
 
 Regras que o código segue:
 
@@ -17,6 +17,9 @@ Regras que o código segue:
 - O público (menu por QR) só usa as funções `publico_*`, com o código da mesa. Não lê tabelas.
 - Preços, IVA e totais calculam-se na base, nunca no navegador.
 - A conta dividida é uma só Factura-Recibo com várias partes de pagamento (`restaurante.pedido_pagamentos`). As contas da divisão fazem-se em cêntimos (`lib/partes.ts`) e a base confere que as partes somam o total.
+- A entrada segue as regras do BOSS (`lib/segundoFactor.ts`, espelho de `src/lib/mfa.ts` e do `MfaGate` do appbossao): email ou nome de utilizador, código da aplicação autenticadora ou por SMS para quem tem segundo factor, dispositivo de confiança durante 7 dias. Falha fechada. As funções do BOSS (SMS, envio à AGT) só aceitam pedidos de domínios `*.boss.ao`, por isso a produção vive em `rest.boss.ao`.
+- Depois de fechar a conta, a aplicação pede o envio do documento à AGT em segundo plano (`agt-submit-document`), como a Venda rápida; se falhar, a tarefa de reenvio do BOSS repete.
+- Os QR das mesas levam sempre o endereço de produção (`ENDERECO_PUBLICO`), porque ficam impressos.
 - O talão usa o gerador do BOSS, copiado para `lib/boss/` sem alterações (ver `lib/boss/LEIAME.md`).
 
 ## Ecrãs
@@ -34,7 +37,7 @@ npm install
 npm run dev
 ```
 
-Por omissão a aplicação liga-se à **base de testes** (`lib/config.ts`) e mostra uma faixa a avisar. Em produção definem-se `NEXT_PUBLIC_SUPABASE_URL` e `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` com os valores do projecto do BOSS.
+Por omissão a aplicação liga-se à **base de testes** (`lib/config.ts`) e mostra uma faixa a avisar. Em produção (Vercel, ambiente Production) `NEXT_PUBLIC_SUPABASE_URL` e `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` apontam para o projecto do BOSS, que tem o esquema `restaurante` exposto na API (Supabase › Settings › API › Exposed schemas).
 
 Verificações antes de enviar:
 

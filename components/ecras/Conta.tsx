@@ -4,6 +4,8 @@ import { useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import { ArrowLeft, CheckCircle2, Minus, Plus } from "lucide-react";
 import { api, mensagem } from "@/lib/api";
+import { BASE_DE_TESTES } from "@/lib/config";
+import { supabase } from "@/lib/supabase";
 import { FORMA, kz, nomeDoPedido, quantidade } from "@/lib/formato";
 import type { Conta as ContaT, Eu, Factura, Forma } from "@/lib/tipos";
 import { MAX_PARTES, MIN_PARTES, escreverValor, repartir, type Parte, type Reparticao } from "@/lib/partes";
@@ -49,6 +51,15 @@ function EscolherCliente({ onEscolher }: { onEscolher: (c: Cliente) => void }) {
       )}
     </div>
   );
+}
+
+/**
+ * Envio à AGT em segundo plano, como na Venda rápida do BOSS: a conta não espera por ele.
+ * Se não chegar, a tarefa de reenvio do BOSS volta a tentar e o estado vê-se em Facturas.
+ */
+function enviarParaAgt(invoiceId: string) {
+  if (BASE_DE_TESTES) return;
+  supabase().functions.invoke("agt-submit-document", { body: { invoiceId } }).catch((e) => console.error("Envio à AGT", e));
 }
 
 const FORMAS = Object.keys(FORMA) as Forma[];
@@ -251,11 +262,11 @@ export function Conta({ eu }: { eu: Eu }) {
               setErro(null);
               try {
                 const outro = cliente && cliente.id !== conta.cliente?.id ? cliente.id : null;
-                setFactura(
-                  dividir
-                    ? await api.fecharConta(id, null, outro, partes.map((p, i) => ({ forma: p.forma!, valor: contas.valores[i]! / 100 })))
-                    : await api.fecharConta(id, forma, outro),
-                );
+                const emitida = dividir
+                  ? await api.fecharConta(id, null, outro, partes.map((p, i) => ({ forma: p.forma!, valor: contas.valores[i]! / 100 })))
+                  : await api.fecharConta(id, forma, outro);
+                setFactura(emitida);
+                enviarParaAgt(emitida.invoice_id);
               } catch (err) {
                 setErro(mensagem(err));
               } finally {

@@ -10,3 +10,9 @@ const BOSS_URL = "https://dobrnawzvftlquhyonkn.supabase.co";
 
 /** A aplicação está ligada à base de testes, e não à do BOSS. */
 export const BASE_DE_TESTES = SUPABASE_URL !== BOSS_URL;
+
+/**
+ * Endereço público da aplicação em produção. Os QR das mesas ficam impressos durante anos: levam sempre
+ * este endereço, seja qual for o domínio de onde o gerente os imprimiu. Na base de testes usa-se o do navegador.
+ */
+export const ENDERECO_PUBLICO = BASE_DE_TESTES ? null : "https://rest.boss.ao";

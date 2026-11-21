@@ -3,6 +3,7 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import QRCode from "qrcode";
+import { ENDERECO_PUBLICO } from "@/lib/config";
 import { api, mensagem, tabela } from "@/lib/api";
 import { FORMA, kz, PAPEL } from "@/lib/formato";
 import { useSessao } from "@/lib/sessao";
@@ -39,7 +40,7 @@ function Interruptor({ ligado, onMudar, rotulo, desligado }: { ligado: boolean; 
 }
 
 /** Endereço que o QR de uma mesa abre. */
-export const enderecoDaMesa = (codigo: string) => `${typeof window === "undefined" ? "" : window.location.origin}/m?c=${codigo}`;
+export const enderecoDaMesa = (codigo: string) => `${ENDERECO_PUBLICO ?? (typeof window === "undefined" ? "" : window.location.origin)}/m?c=${codigo}`;
 
 export function ImagemQR({ codigo, tamanho = 220 }: { codigo: string; tamanho?: number }) {
   const [src, setSrc] = useState<string | null>(null);
