@@ -5,7 +5,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { ArrowLeft, Minus, Plus, Smartphone } from "lucide-react";
 import { api, mensagem } from "@/lib/api";
 import { useAoVivo } from "@/lib/aoVivo";
-import { ESTADO_LINHA, hora, kz, nomeDoPedido, quantidade } from "@/lib/formato";
+import { ESTADO_LINHA, FORMA, hora, kz, nomeDoPedido, quantidade } from "@/lib/formato";
 import type { Categoria, Eu, Linha, Pedido } from "@/lib/tipos";
 import { Carregar, Moldura } from "@/components/Moldura";
 import { Folha } from "@/components/Folha";
@@ -167,6 +167,13 @@ export function Mesa({ eu }: { eu: Eu }) {
       {!emCurso && (
         <div className="card p-5">
           <p className="font-display font-bold">{pedido.estado === "fechado" ? `Conta fechada · ${pedido.factura_numero}` : "Pedido anulado"}</p>
+          {pedido.estado === "fechado" && pedido.pagamentos.length > 0 && (
+            <p className="mt-1 text-sm text-muted">
+              {pedido.pagamentos.length === 1
+                ? `Pago em ${FORMA[pedido.pagamentos[0].forma]}.`
+                : `Dividida por ${pedido.pagamentos.length}: ${pedido.pagamentos.map((g) => `${FORMA[g.forma]} ${kz(g.valor)}`).join(" · ")}.`}
+            </p>
+          )}
           <div className="mt-3 flex flex-wrap items-start gap-2">
             {pedido.estado === "fechado" && <div><BotaoTalao pedido={pedido.id} largura={eu.restaurante?.largura_talao ?? 80} className="btn btn-primary btn-sm" /></div>}
             <Link href="/sala" className="btn btn-ghost btn-sm">Voltar à sala</Link>

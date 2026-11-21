@@ -16,12 +16,13 @@ Regras que o código segue:
 - O restaurante toca no BOSS por cinco guichés, todos dentro dessas funções: ler produtos, ler clientes, ler quem é a empresa e a equipa, emitir a Factura-Recibo (o mesmo caminho da Venda rápida) e ler os dados do talão dessa factura.
 - O público (menu por QR) só usa as funções `publico_*`, com o código da mesa. Não lê tabelas.
 - Preços, IVA e totais calculam-se na base, nunca no navegador.
+- A conta dividida é uma só Factura-Recibo com várias partes de pagamento (`restaurante.pedido_pagamentos`). As contas da divisão fazem-se em cêntimos (`lib/partes.ts`) e a base confere que as partes somam o total.
 - O talão usa o gerador do BOSS, copiado para `lib/boss/` sem alterações (ver `lib/boss/LEIAME.md`).
 
 ## Ecrãs
 
 - `/entrar`, `/configurar` (primeira ligação do restaurante, só o dono ou gestor).
-- `/sala`: mesas por sala, venda ao balcão. `/mesa?p=…`: o pedido. `/conta?p=…`: fechar a conta e imprimir o talão.
+- `/sala`: mesas por sala, venda ao balcão. `/mesa?p=…`: o pedido. `/conta?p=…`: fechar a conta (paga por uma pessoa ou dividida por várias, sempre com uma só factura) e imprimir o talão.
 - `/estacao?id=…`: fila da cozinha ou do bar, ao vivo.
 - `/gestao`: mesas e QR, menu, equipa, definições e fecho do dia. `/gestao/qr`: folha de QR para imprimir.
 - `/m?c=…`: menu do cliente (sem login): ver o menu, pedir, chamar o empregado, pedir a conta.
@@ -50,7 +51,7 @@ npx next build
 1. `01_nucleo_boss_minimo.sql`: réplica mínima das tabelas e funções do BOSS de que o restaurante depende.
 2. A migração do restaurante (do repositório `appbossao`).
 3. `02_dados_de_teste.sql`: duas empresas, utilizadores e produtos de exemplo.
-4. `provas.mjs`: as provas pela API, com logins reais (papéis, isolamento entre empresas, pedidos do cliente, factura, talão, balcão e fecho do dia).
+4. `provas.mjs`: as provas pela API, com logins reais (papéis, isolamento entre empresas, pedidos do cliente, factura, talão, conta dividida, balcão e fecho do dia).
 
 ```bash
 URL=https://<projecto>.supabase.co CHAVE=<chave publicável> SENHA=<senha de teste> node base-de-testes/provas.mjs

@@ -56,7 +56,7 @@ export interface Pedido extends PedidoResumo {
   linhas: Linha[];
   factura_numero: string | null;
   invoice_id: string | null;
-  forma_pagamento: Forma | null;
+  pagamentos: Pagamento[];
   fechado_em: string | null;
 }
 
@@ -86,6 +86,9 @@ export interface Talao {
 
 export type Forma = "numerario" | "multicaixa" | "transferencia";
 
+/** Uma parte do pagamento de uma conta (uma só, se não foi dividida). */
+export interface Pagamento { forma: Forma; valor: number }
+
 export interface Conta {
   pedido: PedidoResumo;
   linhas: { nome: string; quantidade: number; total: number }[];
@@ -95,7 +98,7 @@ export interface Conta {
   cliente: { id: string; nome: string; nif: string } | null;
 }
 
-export interface Factura { invoice_id: string; factura_numero: string; total: number; public_token: string }
+export interface Factura { invoice_id: string; factura_numero: string; total: number; public_token: string; pagamentos: Pagamento[] }
 
 export interface MenuPublico { restaurante: string; mesa: string; pode_pedir: boolean; categorias: Categoria[] }
 export interface EstadoPublico {

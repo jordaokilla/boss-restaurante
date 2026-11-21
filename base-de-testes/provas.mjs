@@ -202,9 +202,39 @@ ok(!!r.erro || (r.d ?? []).length === 0, "sem login, as mesas (e os códigos) n�
 ok(!!(await publico.rpc("sala")).erro, "sem login, a sala não se lê");
 ok(((await joao.ver("pedidos", "select=id,estado")).d ?? []).length >= 3, "o empregado lê os pedidos da sua empresa (para as actualizações ao vivo)");
 
+// --- conta dividida por várias pessoas (uma só factura, várias partes)
+const div = (await joao.rpc("abrir_mesa", { p_mesa: mesa["6"].id, p_pessoas: 4 })).d;
+await joao.rpc("adicionar", { p_pedido: div, p_item: artigo["Mufete"], p_quantidade: 1 });
+await joao.rpc("adicionar", { p_pedido: div, p_item: artigo["Cuca"], p_quantidade: 1 });
+await joao.rpc("enviar", { p_pedido: div });
+const T = (await joao.rpc("conta", { p_pedido: div })).d.total;
+ok(T === 10700, "a conta a dividir é de 10 700 Kz", String(T));
+const fechar = (partes) => joao.rpc("fechar_conta", { p_pedido: div, p_forma: null, p_partes: partes });
+ok(!!(await fechar([{ forma: "numerario", valor: 5000 }, { forma: "multicaixa", valor: 5000 }])).erro, "partes que não somam o total são recusadas");
+ok(!!(await fechar([{ forma: "numerario", valor: 6000 }, { forma: "multicaixa", valor: 5000 }])).erro, "partes que passam o total são recusadas");
+ok(!!(await fechar([{ forma: "numerario", valor: T }])).erro, "dividir pede pelo menos duas partes");
+ok(!!(await fechar([{ forma: "cheque", valor: 5700 }, { forma: "multicaixa", valor: 5000 }])).erro, "cada parte tem de ter uma forma de pagamento válida");
+ok(!!(await fechar([{ forma: "numerario", valor: T + 100 }, { forma: "multicaixa", valor: -100 }])).erro, "uma parte não pode ser negativa");
+ok(!!(await fechar([{ forma: "numerario", valor: "abc" }, { forma: "multicaixa", valor: 5000 }])).erro, "uma parte tem de ser um número");
+ok(!!(await fechar([{ forma: "numerario", valor: 5350.005 }, { forma: "multicaixa", valor: 5349.995 }])).erro, "uma parte não tem mais de dois decimais");
+ok((await joao.rpc("pedido", { p_pedido: div })).d?.estado === "aberto", "depois das recusas, a conta continua aberta e sem factura");
+r = await fechar([{ forma: "numerario", valor: 3566.66 }, { forma: "multicaixa", valor: 3566.67 }, { forma: "multicaixa", valor: 3566.67 }]);
+ok(r.d?.total === T && /^FR /.test(r.d.factura_numero ?? "") && r.d.pagamentos?.length === 3, "três pessoas pagam a conta: uma só Factura-Recibo, três partes", JSON.stringify(r));
+ok(!!(await fechar([{ forma: "numerario", valor: 5700 }, { forma: "multicaixa", valor: 5000 }])).erro, "uma conta dividida não se fecha duas vezes");
+r = await joao.rpc("pedido", { p_pedido: div });
+ok(r.d?.pagamentos?.length === 3 && r.d.pagamentos[0].forma === "numerario" && r.d.pagamentos[0].valor === 3566.66, "o pedido guarda as partes pela ordem em que foram pagas", JSON.stringify(r.d?.pagamentos));
+r = await joao.rpc("pedido", { p_pedido: pedido });
+ok(r.d?.pagamentos?.length === 1 && r.d.pagamentos[0].valor === 31800, "uma conta paga por uma pessoa tem uma só parte");
+ok((await joao.rpc("talao", { p_pedido: div })).d?.invoice?.total === T, "o talão da conta dividida é o da factura inteira");
+ok(((await outro.ver("pedido_pagamentos")).d ?? []).length === 0, "outra empresa não vê os pagamentos do Kianda");
+r = await publico.ver("pedido_pagamentos");
+ok(!!r.erro || (r.d ?? []).length === 0, "sem login, os pagamentos não se lêem");
+ok(!!(await joao.criar("pedido_pagamentos", [{ company_id: empresa, pedido_id: div, ordem: 9, forma: "numerario", valor: 1 }])).erro, "ninguém escreve pagamentos à mão");
+
 // --- fecho do dia
 r = await dono.rpc("fecho_do_dia");
-ok(r.d?.total === 33000 && r.d.contas === 2 && r.d.por_forma.numerario === 31800 && r.d.por_forma.multicaixa === 1200, "fecho do dia: 33 000 Kz em duas contas, por forma de pagamento", JSON.stringify(r.d));
+ok(r.d?.total === 43700 && r.d.contas === 3 && r.d.divididas === 1 && r.d.por_forma.numerario === 35366.66 && r.d.por_forma.multicaixa === 8333.34, "fecho do dia: 43 700 Kz em três contas, uma dividida, por forma de pagamento", JSON.stringify(r.d));
+ok(Object.values(r.d.por_forma).reduce((t, v) => t + v, 0) === r.d.total, "as formas de pagamento somam o total do dia");
 ok(!!(await joao.rpc("fecho_do_dia")).erro, "o fecho do dia é só para o gerente");
 
 console.log(`\n${passou} passaram, ${falhou} falharam`);

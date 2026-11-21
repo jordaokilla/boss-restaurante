@@ -480,7 +480,7 @@ function Fecho() {
           <li key={f} className="flex justify-between py-3 text-[15px]"><span>{FORMA[f]}</span><span className="font-semibold">{kz(dados.por_forma[f] ?? 0)}</span></li>
         ))}
       </ul>
-      <p className="text-sm text-muted">{dados.anulacoes === 0 ? "Sem artigos anulados neste dia." : dados.anulacoes === 1 ? "1 artigo anulado neste dia." : `${dados.anulacoes} artigos anulados neste dia.`} As facturas estão no BOSS, em Facturas.</p>
+      <p className="text-sm text-muted">{dados.anulacoes === 0 ? "Sem artigos anulados neste dia." : dados.anulacoes === 1 ? "1 artigo anulado neste dia." : `${dados.anulacoes} artigos anulados neste dia.`}{dados.divididas === 1 ? " 1 conta foi dividida." : dados.divididas > 1 ? ` ${dados.divididas} contas foram divididas.` : ""} As facturas estão no BOSS, em Facturas.</p>
     </div>
   );
 }

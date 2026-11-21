@@ -1,6 +1,6 @@
 "use client";
 import { supabase, supabasePublico } from "./supabase";
-import type { Categoria, Conta, EstadoPublico, Eu, Factura, Forma, MenuPublico, Pedido, Sala, Talao } from "./tipos";
+import type { Categoria, Conta, EstadoPublico, Eu, Factura, Forma, MenuPublico, Pagamento, Pedido, Sala, Talao } from "./tipos";
 
 /** Mensagem para a pessoa: a da base (já em português) ou uma genérica quando a falha é de rede. */
 export function mensagem(err: unknown): string {
@@ -46,14 +46,15 @@ export const api = {
   atenderChamada: (pedido: string) => rpc<void>("atender_chamada", { p_pedido: pedido }),
   conta: (pedido: string) => rpc<Conta>("conta", { p_pedido: pedido }),
   clientes: (texto: string) => rpc<{ id: string; nome: string; nif: string }[]>("clientes", { p_texto: texto }),
-  fecharConta: (pedido: string, forma: Forma, cliente?: string | null) =>
-    rpc<Factura>("fechar_conta", { p_pedido: pedido, p_forma: forma, p_cliente: cliente ?? null }),
+  /** Paga por uma pessoa: `forma`. Dividida: `partes` (somam o total; o servidor confere). */
+  fecharConta: (pedido: string, forma: Forma | null, cliente?: string | null, partes?: Pagamento[] | null) =>
+    rpc<Factura>("fechar_conta", { p_pedido: pedido, p_forma: forma, p_cliente: cliente ?? null, p_partes: partes ?? null }),
   cancelarPedido: (pedido: string) => rpc<void>("cancelar_pedido", { p_pedido: pedido }),
   equipa: () => rpc<{ user_id: string; nome: string; email: string; gere_empresa: boolean; papel: string | null; activo: boolean }[]>("equipa_lista"),
   produtosBoss: (texto?: string) =>
     rpc<{ product_id: string; nome: string; categoria: string | null; foto: string | null; preco: number }[]>("produtos_boss", { p_texto: texto ?? null }),
   fechoDoDia: (dia?: string) =>
-    rpc<{ dia: string; contas: number; total: number; por_forma: Partial<Record<Forma, number>>; anulacoes: number }>("fecho_do_dia", { p_dia: dia ?? null }),
+    rpc<{ dia: string; contas: number; total: number; divididas: number; por_forma: Partial<Record<Forma, number>>; anulacoes: number }>("fecho_do_dia", { p_dia: dia ?? null }),
 };
 
 export const publico = {
