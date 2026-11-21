@@ -1,0 +1,107 @@
+export type Papel = "gerente" | "empregado" | "cozinha" | "bar";
+
+export interface Estacao { id: string; nome: string; tipo: "cozinha" | "bar" }
+
+export interface Eu {
+  user_id: string;
+  nome: string | null;
+  company_id: string | null;
+  empresa: string | null;
+  gere_empresa: boolean;
+  activo: boolean;
+  papel: Papel | null;
+  restaurante: { nome: string; cliente_pode_pedir: boolean; pedidos_directos: boolean; largura_talao: 58 | 80 } | null;
+  estacoes: Estacao[];
+}
+
+export type EstadoPedido = "aberto" | "conta_pedida" | "fechado" | "anulado";
+
+export interface PedidoResumo {
+  id: string;
+  numero: number;
+  tipo: "mesa" | "balcao";
+  mesa_id: string | null;
+  mesa_nome: string | null;
+  pessoas: number | null;
+  estado: EstadoPedido;
+  aberto_em: string;
+  chamada_em: string | null;
+  conta_pedida_em: string | null;
+  total: number;
+  por_confirmar: number;
+  por_enviar: number;
+  prontos: number;
+}
+
+export interface MesaSala { id: string; nome: string; lugares: number; pedido: PedidoResumo | null }
+export interface Sala { areas: { id: string; nome: string; mesas: MesaSala[] }[]; balcao: PedidoResumo[] }
+
+export type EstadoLinha = "por_confirmar" | "por_enviar" | "enviado" | "a_preparar" | "pronto" | "servido" | "anulado";
+
+export interface Linha {
+  id: string;
+  product_id: string | null;
+  nome: string;
+  quantidade: number;
+  nota: string | null;
+  preco: number;
+  estado: EstadoLinha;
+  origem: "equipa" | "cliente";
+  estacao_id: string | null;
+  criado_em: string;
+  anulado_motivo: string | null;
+}
+
+export interface Pedido extends PedidoResumo {
+  linhas: Linha[];
+  factura_numero: string | null;
+  invoice_id: string | null;
+  forma_pagamento: Forma | null;
+  fechado_em: string | null;
+}
+
+export interface Artigo {
+  id: string;
+  product_id: string;
+  nome: string;
+  descricao: string | null;
+  preco: number;
+  foto: string | null;
+  esgotado: boolean;
+  visivel: boolean;
+}
+export interface Categoria { id: string; nome: string; estacao_id: string | null; itens: Artigo[] }
+
+export interface Talao {
+  lote: string;
+  pedido_id: string;
+  numero: number;
+  tipo: "mesa" | "balcao";
+  mesa_nome: string | null;
+  estado: "enviado" | "a_preparar" | "pronto";
+  desde: string;
+  pronto_em: string | null;
+  linhas: { id: string; nome: string; quantidade: number; nota: string | null; estado: EstadoLinha }[];
+}
+
+export type Forma = "numerario" | "multicaixa" | "transferencia";
+
+export interface Conta {
+  pedido: PedidoResumo;
+  linhas: { nome: string; quantidade: number; total: number }[];
+  subtotal: number;
+  iva: number;
+  total: number;
+  cliente: { id: string; nome: string; nif: string } | null;
+}
+
+export interface Factura { invoice_id: string; factura_numero: string; total: number; public_token: string }
+
+export interface MenuPublico { restaurante: string; mesa: string; pode_pedir: boolean; categorias: Categoria[] }
+export interface EstadoPublico {
+  aberta: boolean;
+  estado?: EstadoPedido;
+  chamada?: boolean;
+  total?: number;
+  linhas?: { nome: string; quantidade: number; nota: string | null; estado: EstadoLinha; preco: number }[];
+}

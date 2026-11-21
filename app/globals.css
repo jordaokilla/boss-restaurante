@@ -1,0 +1,130 @@
+@import "tailwindcss";
+
+/* Cores e raios do BOSS (src/index.css do appbossao), em claro e escuro. */
+:root {
+  --bg: 45 17% 95%;
+  --surface: 0 0% 100%;
+  --ink: 0 0% 9%;
+  --muted: 60 2% 41%;
+  --line: 43 13% 88%;
+  --divider: 40 18% 93%;
+  --accent: 38 92% 50%;
+  --accent-hover: 36 93% 45%;
+  --accent-soft: 39 88% 94%;
+  --accent-text: 31 92% 37%;
+  --on-accent: 0 0% 9%;
+  --danger: 4 76% 40%;
+  --danger-soft: 5 87% 97%;
+  --success: 155 90% 24%;
+  --success-soft: 148 45% 94%;
+  --strong: 0 0% 9%;
+  --on-strong: 0 0% 100%;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: 24 9% 10%;
+    --surface: 12 6% 15%;
+    --ink: 60 9% 97%;
+    --muted: 60 9% 72%;
+    --line: 24 5% 25%;
+    --divider: 24 5% 20%;
+    --accent: 43 96% 56%;
+    --accent-hover: 43 96% 62%;
+    --accent-soft: 25 83% 14%;
+    --accent-text: 47 95% 53%;
+    --on-accent: 20 91% 14%;
+    --danger: 0 84% 66%;
+    --danger-soft: 0 60% 16%;
+    --success: 142 70% 55%;
+    --success-soft: 150 40% 14%;
+    --strong: 60 9% 97%;
+    --on-strong: 24 9% 10%;
+  }
+}
+
+@theme inline {
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+  --font-display: var(--font-jakarta), var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+  --color-bg: hsl(var(--bg));
+  --color-surface: hsl(var(--surface));
+  --color-ink: hsl(var(--ink));
+  --color-muted: hsl(var(--muted));
+  --color-line: hsl(var(--line));
+  --color-divider: hsl(var(--divider));
+  --color-accent: hsl(var(--accent));
+  --color-accent-hover: hsl(var(--accent-hover));
+  --color-accent-soft: hsl(var(--accent-soft));
+  --color-accent-text: hsl(var(--accent-text));
+  --color-on-accent: hsl(var(--on-accent));
+  --color-danger: hsl(var(--danger));
+  --color-danger-soft: hsl(var(--danger-soft));
+  --color-success: hsl(var(--success));
+  --color-success-soft: hsl(var(--success-soft));
+  --color-strong: hsl(var(--strong));
+  --color-on-strong: hsl(var(--on-strong));
+}
+
+html {
+  color-scheme: light dark;
+}
+
+body {
+  background: hsl(var(--bg));
+  color: hsl(var(--ink));
+  font-family: var(--font-sans);
+  -webkit-tap-highlight-color: transparent;
+}
+
+:focus-visible {
+  outline: 2px solid hsl(var(--accent));
+  outline-offset: 2px;
+}
+
+@layer components {
+  .h-title {
+    @apply font-display text-xl font-bold tracking-tight;
+  }
+  .btn {
+    @apply inline-flex min-h-12 items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-center font-display text-[15px] font-bold transition select-none disabled:cursor-not-allowed disabled:opacity-50;
+  }
+  .btn-primary {
+    @apply bg-accent text-on-accent hover:bg-accent-hover;
+  }
+  .btn-strong {
+    @apply bg-strong text-on-strong hover:opacity-90;
+  }
+  .btn-ghost {
+    @apply border border-line bg-surface text-ink hover:border-muted;
+  }
+  .btn-danger {
+    @apply border border-danger/40 bg-danger-soft text-danger hover:border-danger;
+  }
+  .btn-sm {
+    @apply min-h-9 rounded-lg px-3 py-1.5 text-[13px];
+  }
+  .card {
+    @apply rounded-2xl border border-line bg-surface;
+  }
+  .field-label {
+    @apply mb-1.5 block text-sm font-semibold;
+  }
+  .field {
+    @apply block min-h-12 w-full rounded-xl border border-line bg-surface px-3.5 py-2.5 text-base text-ink placeholder:text-muted/70 focus:border-accent focus:outline-none;
+  }
+  .hint {
+    @apply mt-1.5 text-xs text-muted;
+  }
+  .pill {
+    @apply inline-flex items-center gap-1 rounded-full bg-divider px-2.5 py-1 text-xs font-semibold whitespace-nowrap text-muted;
+  }
+  .tab {
+    @apply inline-flex min-h-10 shrink-0 items-center rounded-lg bg-divider px-3.5 text-sm font-semibold text-muted transition;
+  }
+  .tab-on {
+    @apply bg-strong text-on-strong;
+  }
+  .container-x {
+    @apply mx-auto w-full max-w-6xl px-4 sm:px-6;
+  }
+}
