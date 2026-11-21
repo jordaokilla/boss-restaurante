@@ -14,6 +14,8 @@ export interface Eu {
   modulo: "activo" | "suspenso" | "desligado";
   /** O restaurante já foi configurado alguma vez (voltar a ligar traz tudo de volta). */
   ja_configurado: boolean;
+  /** É a empresa de demonstração dos comerciais: dados de exemplo, repostos sozinhos. */
+  demonstracao: boolean;
   /** Porque é que o módulo não se pode ligar agora (plano, subscrição); nulo = pode. */
   bloqueio: string | null;
   papel: Papel | null;

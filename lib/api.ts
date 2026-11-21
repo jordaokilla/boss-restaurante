@@ -59,6 +59,8 @@ export const api = {
   /** Facturas separadas: uma pessoa paga só o que escolheu e leva a sua factura. */
   facturarParte: (pedido: string, linhas: Escolha[], forma: Forma, cliente?: string | null) =>
     rpc<Factura>("facturar_parte", { p_pedido: pedido, p_linhas: linhas, p_forma: forma, p_cliente: cliente ?? null }),
+  /** Só na empresa de demonstração: volta a pôr as mesas, o menu e os pedidos de exemplo. */
+  demoRepor: () => rpc<Eu>("demo_repor"),
   cancelarPedido: (pedido: string) => rpc<void>("cancelar_pedido", { p_pedido: pedido }),
   equipa: () => rpc<{ user_id: string; nome: string; email: string; gere_empresa: boolean; papel: string | null; activo: boolean }[]>("equipa_lista"),
   produtosBoss: (texto?: string) =>

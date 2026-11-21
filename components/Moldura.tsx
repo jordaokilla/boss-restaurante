@@ -121,6 +121,9 @@ export function Moldura({ papeis, children }: { papeis: Papel[]; children: (eu: 
       {BASE_DE_TESTES && (
         <p className="bg-strong px-4 py-1 text-center text-xs font-semibold text-on-strong">Base de testes · as facturas aqui não são reais</p>
       )}
+      {eu.demonstracao && (
+        <p className="bg-strong px-4 py-1 text-center text-xs font-semibold text-on-strong print:hidden">Demonstração · restaurante e dados de exemplo</p>
+      )}
       <header className="sticky top-0 z-30 border-b border-line bg-surface print:hidden">
         <div className="container-x flex h-14 items-center justify-between gap-3">
           <Link href={inicioDe(eu)} className="flex min-w-0 items-center gap-2.5">

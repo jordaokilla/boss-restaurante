@@ -442,7 +442,48 @@ function Definicoes({ eu }: { eu: Eu }) {
           ))}
         </div>
       </fieldset>
-      {eu.gere_empresa && <Desligar />}
+      {eu.demonstracao && <ReporDemonstracao />}
+      {eu.gere_empresa && !eu.demonstracao && <Desligar />}
+    </div>
+  );
+}
+
+/** Só na empresa de demonstração: volta ao exemplo antes de o mostrar a um cliente. */
+function ReporDemonstracao() {
+  const { recarregar } = useSessao();
+  const [ocupado, setOcupado] = useState(false);
+  const [erro, setErro] = useState<string | null>(null);
+  const [feito, setFeito] = useState(false);
+  return (
+    <div className="card p-4">
+      <p className="text-[15px] font-semibold">Repor a demonstração</p>
+      <p className="mt-0.5 text-sm text-muted">
+        Volta a pôr as mesas, o menu, a equipa e os pedidos de exemplo, com as horas de agora. Use antes de cada demonstração.
+        Também se repõe sozinha de 30 em 30 minutos, quando ninguém está a mexer.
+      </p>
+      <Erro texto={erro} />
+      {feito && <p className="mt-2 text-sm font-medium text-success" role="status">Demonstração reposta.</p>}
+      <button
+        type="button"
+        className="btn btn-primary btn-sm mt-3"
+        disabled={ocupado}
+        onClick={async () => {
+          setOcupado(true);
+          setErro(null);
+          setFeito(false);
+          try {
+            await api.demoRepor();
+            await recarregar();
+            setFeito(true);
+          } catch (err) {
+            setErro(mensagem(err));
+          } finally {
+            setOcupado(false);
+          }
+        }}
+      >
+        {ocupado ? "A repor…" : "Repor agora"}
+      </button>
     </div>
   );
 }

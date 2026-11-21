@@ -22,6 +22,7 @@ Regras que o código segue:
 - Depois de fechar a conta, a aplicação pede o envio do documento à AGT em segundo plano (`agt-submit-document`), como a Venda rápida; se falhar, a tarefa de reenvio do BOSS repete.
 - Os QR das mesas levam sempre o endereço de produção (`ENDERECO_PUBLICO`), porque ficam impressos.
 - O talão usa o gerador do BOSS, copiado para `lib/boss/` sem alterações (ver `lib/boss/LEIAME.md`).
+- A demonstração dos comerciais é uma empresa normal do BOSS registada em `restaurante.demo` (nunca `companies.is_demo`, que é só da demonstração do BOSS), com uma conta por papel em `restaurante.demo_contas`. A base repõe-a sozinha de 30 em 30 minutos quando ninguém está a mexer (`_demo_manter`): senha, mesas, menu, equipa, vendas do dia e mesas em curso. A aplicação só mostra a faixa «Demonstração» e o botão «Repor agora» (`eu.demonstracao`, `demo_repor`).
 
 ## Ecrãs
 
