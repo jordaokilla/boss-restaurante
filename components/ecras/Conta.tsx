@@ -130,7 +130,7 @@ function Facturas({ facturas, largura }: { facturas: FacturaDoPedido[]; largura:
   return (
     <ul className="card divide-y divide-divider px-4">
       {facturas.map((f) => (
-        <li key={f.id} className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 py-3">
+        <li key={f.id} className="flex items-center justify-between gap-3 py-3">
           <div className="min-w-0">
             <p className="font-mono text-sm">{f.numero}</p>
             <p className="text-sm text-muted">
@@ -138,7 +138,7 @@ function Facturas({ facturas, largura }: { facturas: FacturaDoPedido[]; largura:
               {f.cliente && f.cliente.trim().toLowerCase() !== "consumidor final" ? ` · ${f.cliente}` : ""}
             </p>
           </div>
-          <div><BotaoTalao factura={f.id} largura={largura} className="btn btn-ghost btn-sm" texto="Talão" /></div>
+          <div className="shrink-0"><BotaoTalao factura={f.id} largura={largura} className="btn btn-ghost btn-sm" texto="Talão" /></div>
         </li>
       ))}
     </ul>

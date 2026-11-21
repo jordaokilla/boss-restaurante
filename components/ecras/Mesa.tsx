@@ -91,9 +91,9 @@ function FacturasDoPedido({ pedido, largura }: { pedido: Pedido; largura: 58 | 8
   return (
     <ul className="mt-3 divide-y divide-divider rounded-xl border border-line px-3.5">
       {pedido.facturas.map((f) => (
-        <li key={f.id} className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1.5 py-2.5">
+        <li key={f.id} className="flex items-center justify-between gap-3 py-2.5">
           <span className="min-w-0 text-sm"><span className="font-mono">{f.numero}</span> · {kz(f.total)}</span>
-          <div><BotaoTalao factura={f.id} largura={largura} className="btn btn-ghost btn-sm" texto="Talão" /></div>
+          <div className="shrink-0"><BotaoTalao factura={f.id} largura={largura} className="btn btn-ghost btn-sm" texto="Talão" /></div>
         </li>
       ))}
     </ul>
