@@ -86,6 +86,20 @@ function EditarLinha({ linha, gerente, onFeito, onFechar }: { linha: Linha; gere
   );
 }
 
+/** As facturas de um pedido com contas separadas, cada uma com o seu talão. */
+function FacturasDoPedido({ pedido, largura }: { pedido: Pedido; largura: 58 | 80 }) {
+  return (
+    <ul className="mt-3 divide-y divide-divider rounded-xl border border-line px-3.5">
+      {pedido.facturas.map((f) => (
+        <li key={f.id} className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1.5 py-2.5">
+          <span className="min-w-0 text-sm"><span className="font-mono">{f.numero}</span> · {kz(f.total)}</span>
+          <div><BotaoTalao factura={f.id} largura={largura} className="btn btn-ghost btn-sm" texto="Talão" /></div>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
 export function Mesa({ eu }: { eu: Eu }) {
   const id = useSearchParams().get("p") ?? "";
   const router = useRouter();
@@ -95,6 +109,7 @@ export function Mesa({ eu }: { eu: Eu }) {
   const [erro, setErro] = useState<string | null>(null);
   const [ocupado, setOcupado] = useState(false);
   const [aEditar, setAEditar] = useState<Linha | null>(null);
+  const largura = eu.restaurante?.largura_talao ?? 80;
 
   const carregar = useCallback(async () => {
     if (!id) return;
@@ -166,18 +181,29 @@ export function Mesa({ eu }: { eu: Eu }) {
 
       {!emCurso && (
         <div className="card p-5">
-          <p className="font-display font-bold">{pedido.estado === "fechado" ? `Conta fechada · ${pedido.factura_numero}` : "Pedido anulado"}</p>
-          {pedido.estado === "fechado" && pedido.pagamentos.length > 0 && (
+          <p className="font-display font-bold">
+            {pedido.estado !== "fechado" ? "Pedido anulado" : pedido.facturas.length === 1 ? `Conta fechada · ${pedido.facturas[0].numero}` : `Conta fechada · ${pedido.facturas.length} facturas`}
+          </p>
+          {pedido.estado === "fechado" && pedido.facturas.length === 1 && pedido.pagamentos.length > 0 && (
             <p className="mt-1 text-sm text-muted">
               {pedido.pagamentos.length === 1
                 ? `Pago em ${FORMA[pedido.pagamentos[0].forma]}.`
                 : `Dividida por ${pedido.pagamentos.length}: ${pedido.pagamentos.map((g) => `${FORMA[g.forma]} ${kz(g.valor)}`).join(" · ")}.`}
             </p>
           )}
+          {pedido.estado === "fechado" && pedido.facturas.length > 1 && <FacturasDoPedido pedido={pedido} largura={largura} />}
           <div className="mt-3 flex flex-wrap items-start gap-2">
-            {pedido.estado === "fechado" && <div><BotaoTalao pedido={pedido.id} largura={eu.restaurante?.largura_talao ?? 80} className="btn btn-primary btn-sm" /></div>}
+            {pedido.estado === "fechado" && pedido.facturas.length === 1 && <div><BotaoTalao factura={pedido.facturas[0].id} largura={largura} className="btn btn-primary btn-sm" /></div>}
             <Link href="/sala" className="btn btn-ghost btn-sm">Voltar à sala</Link>
           </div>
+        </div>
+      )}
+
+      {emCurso && pedido.facturas.length > 0 && (
+        <div className="card p-5">
+          <p className="font-display font-bold">Já pago · {kz(pedido.pago)}</p>
+          <p className="mt-1 text-sm text-muted">Falta pagar {kz(pedido.total)}.</p>
+          <FacturasDoPedido pedido={pedido} largura={largura} />
         </div>
       )}
 
@@ -252,6 +278,7 @@ export function Mesa({ eu }: { eu: Eu }) {
                       <span className="block text-[15px] font-medium">{quantidade(l.quantidade)} × {l.nome}</span>
                       {l.nota && <span className="block text-xs text-muted">{l.nota}</span>}
                       {l.origem === "cliente" && <span className="block text-xs text-muted">Pedido pelo cliente</span>}
+                      {emCurso && l.facturada > 0 && <span className="block text-xs font-semibold text-success">{l.facturada >= l.quantidade ? "Já pago" : `${quantidade(l.facturada)} de ${quantidade(l.quantidade)} já pagos`}</span>}
                     </span>
                     <span className="shrink-0 text-right">
                       <span className={`block text-xs font-bold ${COR_ESTADO[l.estado]}`}>{ESTADO_LINHA[l.estado]}</span>

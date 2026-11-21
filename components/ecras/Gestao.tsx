@@ -474,14 +474,14 @@ function Fecho() {
       <Erro texto={erro} />
       <div className="grid grid-cols-2 gap-3">
         <div className="card p-4"><p className="text-xs font-bold tracking-wider text-muted uppercase">Total facturado</p><p className="mt-1 font-display text-2xl font-extrabold">{kz(dados.total)}</p></div>
-        <div className="card p-4"><p className="text-xs font-bold tracking-wider text-muted uppercase">Contas fechadas</p><p className="mt-1 font-display text-2xl font-extrabold">{dados.contas}</p></div>
+        <div className="card p-4"><p className="text-xs font-bold tracking-wider text-muted uppercase">Contas fechadas</p><p className="mt-1 font-display text-2xl font-extrabold">{dados.contas}</p>{dados.facturas !== dados.contas && <p className="text-xs text-muted">{dados.facturas === 1 ? "1 factura" : `${dados.facturas} facturas`}</p>}</div>
       </div>
       <ul className="card divide-y divide-divider px-4">
         {(Object.keys(FORMA) as Forma[]).map((f) => (
           <li key={f} className="flex justify-between py-3 text-[15px]"><span>{FORMA[f]}</span><span className="font-semibold">{kz(dados.por_forma[f] ?? 0)}</span></li>
         ))}
       </ul>
-      <p className="text-sm text-muted">{dados.anulacoes === 0 ? "Sem artigos anulados neste dia." : dados.anulacoes === 1 ? "1 artigo anulado neste dia." : `${dados.anulacoes} artigos anulados neste dia.`}{dados.divididas === 1 ? " 1 conta foi dividida." : dados.divididas > 1 ? ` ${dados.divididas} contas foram divididas.` : ""} As facturas estão no BOSS, em Facturas.</p>
+      <p className="text-sm text-muted">{dados.anulacoes === 0 ? "Sem artigos anulados neste dia." : dados.anulacoes === 1 ? "1 artigo anulado neste dia." : `${dados.anulacoes} artigos anulados neste dia.`}{dados.divididas === 1 ? " 1 conta foi dividida." : dados.divididas > 1 ? ` ${dados.divididas} contas foram divididas.` : ""}{dados.separadas === 1 ? " 1 conta teve facturas separadas." : dados.separadas > 1 ? ` ${dados.separadas} contas tiveram facturas separadas.` : ""} As facturas estão no BOSS, em Facturas.</p>
     </div>
   );
 }

@@ -7,7 +7,7 @@ import { api, mensagem } from "@/lib/api";
 import { BASE_DE_TESTES } from "@/lib/config";
 import { supabase } from "@/lib/supabase";
 import { FORMA, kz, nomeDoPedido, quantidade } from "@/lib/formato";
-import type { Conta as ContaT, Eu, Factura, Forma } from "@/lib/tipos";
+import type { Conta as ContaT, Escolha, Eu, Factura, FacturaDoPedido, Forma } from "@/lib/tipos";
 import { MAX_PARTES, MIN_PARTES, escreverValor, repartir, type Parte, type Reparticao } from "@/lib/partes";
 import { Carregar, Moldura } from "@/components/Moldura";
 import { Folha } from "@/components/Folha";
@@ -122,14 +122,75 @@ function Dividir({ partes, contas, onMudar }: { partes: Parte[]; contas: Reparti
   );
 }
 
+type Modo = "uma" | "dividir" | "separadas";
+type PorPagar = ContaT["por_pagar"][number];
+
+/** Facturas já emitidas para este pedido, cada uma com o seu talão. */
+function Facturas({ facturas, largura }: { facturas: FacturaDoPedido[]; largura: 58 | 80 }) {
+  return (
+    <ul className="card divide-y divide-divider px-4">
+      {facturas.map((f) => (
+        <li key={f.id} className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 py-3">
+          <div className="min-w-0">
+            <p className="font-mono text-sm">{f.numero}</p>
+            <p className="text-sm text-muted">
+              {kz(f.total)} · {f.pagamentos.length === 1 ? FORMA[f.pagamentos[0].forma] : `dividida por ${f.pagamentos.length}`}
+              {f.cliente && f.cliente.trim().toLowerCase() !== "consumidor final" ? ` · ${f.cliente}` : ""}
+            </p>
+          </div>
+          <div><BotaoTalao factura={f.id} largura={largura} className="btn btn-ghost btn-sm" texto="Talão" /></div>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+/** Facturas separadas: o que esta pessoa paga, artigo a artigo. */
+function Separadas({ linhas, escolha, onMudar }: { linhas: PorPagar[]; escolha: Record<string, number>; onMudar: (e: Record<string, number>) => void }) {
+  const por = (l: PorPagar, q: number) => onMudar({ ...escolha, [l.id]: Math.max(0, Math.min(l.quantidade, q)) });
+  const tudo = linhas.every((l) => (escolha[l.id] ?? 0) >= l.quantidade);
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center justify-between gap-3">
+        <span className="text-sm font-semibold">O que esta pessoa paga</span>
+        <button type="button" className="btn btn-ghost btn-sm" onClick={() => onMudar(tudo ? {} : Object.fromEntries(linhas.map((l) => [l.id, l.quantidade])))}>
+          {tudo ? "Limpar" : "Tudo o que falta"}
+        </button>
+      </div>
+      <ul className="card divide-y divide-divider px-4">
+        {linhas.map((l) => {
+          const q = escolha[l.id] ?? 0;
+          // Uma linha com menos de uma unidade por pagar (meia dose) escolhe-se por inteiro.
+          const passo = Math.min(1, l.quantidade);
+          return (
+            <li key={l.id} className="flex items-center justify-between gap-3 py-3">
+              <div className="min-w-0">
+                <p className="text-[15px] font-medium">{l.nome}</p>
+                <p className="text-sm text-muted">{kz(l.preco)} cada · {l.quantidade === 1 ? "falta 1" : `faltam ${quantidade(l.quantidade)}`}{l.nota ? ` · ${l.nota}` : ""}</p>
+              </div>
+              <div className="flex shrink-0 items-center gap-1.5" role="group" aria-label={`Quantidade de ${l.nome}`}>
+                <button type="button" className="btn btn-ghost btn-sm px-2.5" aria-label={`Menos ${l.nome}`} disabled={q <= 0} onClick={() => por(l, q - passo)}><Minus size={16} aria-hidden /></button>
+                <span className={`w-8 text-center font-display text-lg font-bold ${q > 0 ? "" : "text-muted"}`} aria-live="polite">{quantidade(q)}</span>
+                <button type="button" className="btn btn-ghost btn-sm px-2.5" aria-label={`Mais ${l.nome}`} disabled={q >= l.quantidade} onClick={() => por(l, q + passo)}><Plus size={16} aria-hidden /></button>
+              </div>
+            </li>
+          );
+        })}
+      </ul>
+    </div>
+  );
+}
+
 export function Conta({ eu }: { eu: Eu }) {
   const largura = eu.restaurante?.largura_talao ?? 80;
   const id = useSearchParams().get("p") ?? "";
   const [conta, setConta] = useState<ContaT | null>(null);
   const [erro, setErro] = useState<string | null>(null);
+  const [modo, setModo] = useState<Modo>("uma");
   const [forma, setForma] = useState<Forma | null>(null);
-  const [dividir, setDividir] = useState(false);
   const [partes, setPartes] = useState<Parte[]>([parteNova(), parteNova()]);
+  const [escolha, setEscolha] = useState<Record<string, number>>({});
+  const [parte, setParte] = useState<{ chave: string; total: number } | null>(null);
   const [cliente, setCliente] = useState<Cliente | null>(null);
   const [aEscolher, setAEscolher] = useState(false);
   const [ocupado, setOcupado] = useState(false);
@@ -141,6 +202,8 @@ export function Conta({ eu }: { eu: Eu }) {
       const c = await api.conta(id);
       setConta(c);
       setCliente((actual) => actual ?? c.cliente);
+      // Se a conta mudou entretanto, a escolha não pode passar do que falta pagar.
+      setEscolha((actual) => Object.fromEntries(c.por_pagar.filter((l) => (actual[l.id] ?? 0) > 0).map((l) => [l.id, Math.min(actual[l.id], l.quantidade)])));
     } catch (err) {
       setErro(mensagem(err));
     }
@@ -149,6 +212,24 @@ export function Conta({ eu }: { eu: Eu }) {
     const t = setTimeout(carregar, 0);
     return () => clearTimeout(t);
   }, [carregar]);
+
+  // A parte escolhida: o total calcula-se na base (preços e IVA nunca no aparelho).
+  const seleccao: Escolha[] = Object.entries(escolha).filter(([, q]) => q > 0).map(([linha, q]) => ({ linha, quantidade: q }));
+  const chave = JSON.stringify(seleccao);
+  useEffect(() => {
+    if (modo !== "separadas" || seleccao.length === 0) return;
+    let vivo = true;
+    const t = setTimeout(() => {
+      api.conta(id, seleccao)
+        .then((c) => vivo && c.parte && setParte({ chave, total: c.parte.total }))
+        .catch((err) => vivo && setErro(mensagem(err)));
+    }, 250);
+    return () => {
+      vivo = false;
+      clearTimeout(t);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [modo, chave, id]);
 
   if (!id) return <p className="text-muted">Pedido em falta.</p>;
   if (!conta && erro) {
@@ -167,7 +248,7 @@ export function Conta({ eu }: { eu: Eu }) {
       <div className="mx-auto max-w-md">
         <div className="card p-6 text-center">
           <CheckCircle2 size={40} className="mx-auto text-success" aria-hidden />
-          <h1 className="h-title mt-3">Conta fechada</h1>
+          <h1 className="h-title mt-3">{factura.fechado ? "Conta fechada" : "Factura emitida"}</h1>
           <p className="mt-1 text-[15px] text-muted">{nome} · {kz(factura.total)}{factura.pagamentos.length === 1 ? ` · ${FORMA[factura.pagamentos[0].forma]}` : ` · dividida por ${factura.pagamentos.length}`}</p>
           {factura.pagamentos.length > 1 && (
             <ul className="mt-4 divide-y divide-divider rounded-xl border border-line px-4 text-left">
@@ -181,8 +262,30 @@ export function Conta({ eu }: { eu: Eu }) {
           )}
           <p className="mt-4 rounded-xl bg-divider px-4 py-3 font-mono text-sm">{factura.factura_numero}</p>
           <p className="mt-3 text-sm text-muted">A Factura-Recibo já está no BOSS, em Facturas. O envio à AGT segue em segundo plano.</p>
-          <div className="mt-5"><BotaoTalao pedido={id} largura={largura} /></div>
-          <Link href="/sala" className="btn btn-ghost mt-2 w-full">Voltar à sala</Link>
+          {!factura.fechado && <p className="mt-3 rounded-xl bg-accent-soft px-4 py-3 text-[15px] font-semibold text-accent-text">Falta pagar {kz(factura.falta)}. A mesa continua aberta.</p>}
+          <div className="mt-5"><BotaoTalao factura={factura.factura_id} largura={largura} /></div>
+          {factura.fechado ? (
+            <Link href="/sala" className="btn btn-ghost mt-2 w-full">Voltar à sala</Link>
+          ) : (
+            <>
+              <button
+                type="button"
+                className="btn btn-strong mt-2 w-full"
+                onClick={() => {
+                  setFactura(null);
+                  setForma(null);
+                  setEscolha({});
+                  setParte(null);
+                  setCliente(conta.cliente);
+                  setErro(null);
+                  void carregar();
+                }}
+              >
+                Próxima pessoa
+              </button>
+              <Link href={`/mesa?p=${id}`} className="btn btn-ghost mt-2 w-full">Voltar ao pedido</Link>
+            </>
+          )}
         </div>
       </div>
     );
@@ -190,7 +293,12 @@ export function Conta({ eu }: { eu: Eu }) {
 
   const fechado = conta.pedido.estado === "fechado" || conta.pedido.estado === "anulado";
   const contas = repartir(Math.round(conta.total * 100), partes);
-  const pagamentoPronto = dividir ? contas.problema === null && partes.every((p) => p.forma) : !!forma;
+  const totalDaParte = seleccao.length > 0 && parte?.chave === chave ? parte.total : null;
+  const pagamentoPronto =
+    modo === "dividir" ? contas.problema === null && partes.every((p) => p.forma)
+    : modo === "separadas" ? totalDaParte !== null && totalDaParte > 0 && !!forma
+    : !!forma;
+  const jaPago = conta.facturas.length > 0;
 
   return (
     <div className="mx-auto max-w-md space-y-4">
@@ -202,11 +310,15 @@ export function Conta({ eu }: { eu: Eu }) {
         </div>
       </div>
 
+      {jaPago && (
+        <section className="space-y-2" aria-label="Facturas já emitidas">
+          <h2 className="text-sm font-semibold">{fechado ? "Facturas desta conta" : `Já pago · ${kz(conta.pedido.pago)}`}</h2>
+          <Facturas facturas={conta.facturas} largura={largura} />
+        </section>
+      )}
+
       {fechado ? (
-        <div className="card p-5">
-          <p className="text-[15px] text-muted">{conta.pedido.estado === "fechado" ? "Esta conta já está fechada." : "Este pedido foi anulado."}</p>
-          {conta.pedido.estado === "fechado" && <div className="mt-3"><BotaoTalao pedido={id} largura={largura} className="btn btn-ghost btn-sm" /></div>}
-        </div>
+        !jaPago && <p className="card p-5 text-[15px] text-muted">{conta.pedido.estado === "fechado" ? "Esta conta já está fechada." : "Este pedido foi anulado."}</p>
       ) : (
         <>
           <ul className="card divide-y divide-divider px-4">
@@ -220,23 +332,30 @@ export function Conta({ eu }: { eu: Eu }) {
           <dl className="space-y-1 px-1">
             <div className="flex justify-between text-sm text-muted"><dt>Sem IVA</dt><dd>{kz(conta.subtotal)}</dd></div>
             <div className="flex justify-between text-sm text-muted"><dt>IVA</dt><dd>{kz(conta.iva)}</dd></div>
-            <div className="flex items-baseline justify-between pt-1"><dt className="text-sm font-semibold">Total</dt><dd className="font-display text-3xl font-extrabold">{kz(conta.total)}</dd></div>
+            <div className="flex items-baseline justify-between pt-1"><dt className="text-sm font-semibold">{jaPago ? "Falta pagar" : "Total"}</dt><dd className="font-display text-3xl font-extrabold">{kz(conta.total)}</dd></div>
           </dl>
 
-          <button type="button" className="btn btn-ghost btn-sm" onClick={() => setAEscolher(true)}>
-            {cliente && cliente.id !== conta.cliente?.id ? "Mudar cliente" : "Factura com NIF"}
-          </button>
-
-          <div className="flex gap-2" role="group" aria-label="Quem paga">
-            <button type="button" className={`tab ${dividir ? "" : "tab-on"}`} aria-pressed={!dividir} onClick={() => setDividir(false)}>Uma pessoa paga</button>
-            <button type="button" className={`tab ${dividir ? "tab-on" : ""}`} aria-pressed={dividir} onClick={() => setDividir(true)}>Dividir a conta</button>
+          <div className="flex flex-wrap gap-2" role="group" aria-label="Quem paga">
+            <button type="button" className={`tab ${modo === "uma" ? "tab-on" : ""}`} aria-pressed={modo === "uma"} onClick={() => setModo("uma")}>Uma pessoa paga</button>
+            <button type="button" className={`tab ${modo === "dividir" ? "tab-on" : ""}`} aria-pressed={modo === "dividir"} onClick={() => setModo("dividir")}>Dividir a conta</button>
+            <button type="button" className={`tab ${modo === "separadas" ? "tab-on" : ""}`} aria-pressed={modo === "separadas"} onClick={() => setModo("separadas")}>Facturas separadas</button>
           </div>
 
-          {dividir ? (
+          {modo === "separadas" && (
+            conta.por_pagar.length === 0
+              ? <p className="card p-4 text-[15px] text-muted">Ainda não há artigos enviados para facturar.</p>
+              : <Separadas linhas={conta.por_pagar} escolha={escolha} onMudar={setEscolha} />
+          )}
+
+          <button type="button" className="btn btn-ghost btn-sm" onClick={() => setAEscolher(true)}>
+            {cliente && cliente.id !== conta.cliente?.id ? "Mudar cliente" : modo === "separadas" ? "Factura com NIF para esta pessoa" : "Factura com NIF"}
+          </button>
+
+          {modo === "dividir" ? (
             <Dividir partes={partes} contas={contas} onMudar={setPartes} />
           ) : (
             <fieldset>
-              <legend className="field-label">Como foi pago</legend>
+              <legend className="field-label">{modo === "separadas" ? "Como paga esta pessoa" : "Como foi pago"}</legend>
               <div className="grid grid-cols-3 gap-2">
                 {FORMAS.map((f) => (
                   <label key={f} className={`flex min-h-12 cursor-pointer items-center justify-center rounded-xl border px-2 text-center text-sm font-semibold ${forma === f ? "border-strong bg-strong text-on-strong" : "border-line bg-surface"}`}>
@@ -248,8 +367,12 @@ export function Conta({ eu }: { eu: Eu }) {
             </fieldset>
           )}
 
-          <p className="text-sm text-muted">Ao confirmar, o BOSS emite a Factura-Recibo certificada, baixa o stock e regista o recebimento. {dividir ? "Sai uma só factura para a conta toda; o que cada pessoa pagou fica no fecho do dia. " : ""}{conta.pedido.tipo === "mesa" ? "A mesa fica livre." : ""}</p>
-          {dividir && contas.problema === null && !pagamentoPronto && <p className="text-sm font-medium text-muted">Indique como paga cada pessoa.</p>}
+          <p className="text-sm text-muted">
+            {modo === "separadas"
+              ? "Ao confirmar, o BOSS emite uma Factura-Recibo só com o que esta pessoa paga. O resto fica na mesa, para a pessoa seguinte."
+              : `Ao confirmar, o BOSS emite a Factura-Recibo certificada, baixa o stock e regista o recebimento. ${modo === "dividir" ? "Sai uma só factura para a conta toda; o que cada pessoa pagou fica no fecho do dia. " : ""}${conta.pedido.tipo === "mesa" ? "A mesa fica livre." : ""}`}
+          </p>
+          {modo === "dividir" && contas.problema === null && !pagamentoPronto && <p className="text-sm font-medium text-muted">Indique como paga cada pessoa.</p>}
           {erro && <p className="rounded-xl bg-danger-soft px-4 py-3 text-sm font-medium text-danger" role="alert">{erro}</p>}
           {!cliente && <p className="rounded-xl bg-danger-soft px-4 py-3 text-sm font-medium text-danger" role="alert">A empresa não tem o cliente «Consumidor final» no BOSS. Escolha um cliente para facturar.</p>}
 
@@ -262,19 +385,24 @@ export function Conta({ eu }: { eu: Eu }) {
               setErro(null);
               try {
                 const outro = cliente && cliente.id !== conta.cliente?.id ? cliente.id : null;
-                const emitida = dividir
-                  ? await api.fecharConta(id, null, outro, partes.map((p, i) => ({ forma: p.forma!, valor: contas.valores[i]! / 100 })))
+                const emitida =
+                  modo === "separadas" ? await api.facturarParte(id, seleccao, forma!, outro)
+                  : modo === "dividir" ? await api.fecharConta(id, null, outro, partes.map((p, i) => ({ forma: p.forma!, valor: contas.valores[i]! / 100 })))
                   : await api.fecharConta(id, forma, outro);
                 setFactura(emitida);
                 enviarParaAgt(emitida.invoice_id);
               } catch (err) {
                 setErro(mensagem(err));
+                // A conta pode ter mudado noutro aparelho: volta a lê-la.
+                void carregar();
               } finally {
                 setOcupado(false);
               }
             }}
           >
-            {ocupado ? "A emitir a factura…" : `Emitir factura · ${kz(conta.total)}`}
+            {ocupado ? "A emitir a factura…"
+              : modo === "separadas" ? (seleccao.length === 0 ? "Escolha o que esta pessoa paga" : totalDaParte === null ? "A calcular…" : `Emitir factura desta pessoa · ${kz(totalDaParte)}`)
+              : `Emitir factura · ${kz(conta.total)}`}
           </button>
         </>
       )}

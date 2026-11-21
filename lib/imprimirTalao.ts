@@ -1,15 +1,16 @@
 "use client";
-// Impressão do talão da Factura-Recibo de um pedido fechado.
+// Impressão do talão de uma Factura-Recibo do restaurante.
 // Segue `src/lib/printInvoice.ts` do BOSS (moldura escondida no computador e no Android; PDF pela folha
 // de partilha no iPhone e na aplicação instalada). Os dados vêm do guiché `restaurante.talao`,
-// porque o empregado de mesa não lê as facturas directamente.
+// porque o empregado de mesa não lê as facturas directamente. `factura` é a factura do restaurante
+// (`pedido_facturas.id`): um pedido com contas separadas tem várias.
 import { supabase } from "./supabase";
 import { mensagem } from "./api";
 import { AGT_QR_OPTIONS, agtQrSegments } from "./boss/agt-qr";
 import { buildReceiptHtml, receiptQrContent, type ReceiptData, type ReceiptWidth } from "./boss/invoiceReceipt";
 
-async function dadosDoTalao(pedido: string): Promise<ReceiptData> {
-  const { data, error } = await supabase().schema("restaurante").rpc("talao", { p_pedido: pedido });
+async function dadosDoTalao(factura: string): Promise<ReceiptData> {
+  const { data, error } = await supabase().schema("restaurante").rpc("talao", { p_factura: factura });
   if (error) throw new Error(mensagem(error));
   const dados = data as ReceiptData;
   try {
@@ -113,14 +114,14 @@ async function partilhar(file: File): Promise<void> {
   setTimeout(() => URL.revokeObjectURL(url), 10 * 60 * 1000);
 }
 
-/** HTML do talão de um pedido fechado (para imprimir ou para mostrar). */
-export async function htmlDoTalao(pedido: string, largura: ReceiptWidth): Promise<string> {
-  return buildReceiptHtml(await dadosDoTalao(pedido), largura);
+/** HTML do talão de uma factura (para imprimir ou para mostrar). */
+export async function htmlDoTalao(factura: string, largura: ReceiptWidth): Promise<string> {
+  return buildReceiptHtml(await dadosDoTalao(factura), largura);
 }
 
-/** Imprime o talão (80 ou 58 mm) da factura de um pedido fechado. */
-export async function imprimirTalao(pedido: string, largura: ReceiptWidth = 80): Promise<void> {
-  const dados = await dadosDoTalao(pedido);
+/** Imprime o talão (80 ou 58 mm) de uma factura do restaurante. */
+export async function imprimirTalao(factura: string, largura: ReceiptWidth = 80): Promise<void> {
+  const dados = await dadosDoTalao(factura);
   if (imprimeNaMoldura()) imprimirNaMoldura(buildReceiptHtml(dados, largura));
   else await partilhar(await ficheiroDoTalao(dados, largura));
 }

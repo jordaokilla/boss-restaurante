@@ -146,17 +146,18 @@ ok(Math.abs(r.d.subtotal + r.d.iva - r.d.total) < 0.001, "subtotal + IVA = total
 ok(!!(await joao.rpc("fechar_conta", { p_pedido: pedido, p_forma: "cheque" })).erro, "não fecha sem uma forma de pagamento válida");
 r = await joao.rpc("fechar_conta", { p_pedido: pedido, p_forma: "numerario" });
 ok(r.d?.total === 31800 && /^FR /.test(r.d.factura_numero ?? ""), "o empregado fecha a conta e sai a Factura-Recibo", JSON.stringify(r));
-const factura1 = r.d?.invoice_id;
+const factura1 = r.d?.invoice_id, talao1 = r.d?.factura_id;
+ok(r.d?.fechado === true && r.d.falta === 0, "paga a conta toda, o pedido fica fechado");
 ok(!!(await joao.rpc("fechar_conta", { p_pedido: pedido, p_forma: "numerario" })).erro, "a mesma conta não se fecha duas vezes");
 
 // --- o talão da factura
-r = await joao.rpc("talao", { p_pedido: pedido });
+r = await joao.rpc("talao", { p_factura: talao1 });
 ok(r.d?.invoice?.document_type === "FR" && r.d.invoice.total === 31800 && r.d.items?.length === 3 && !!r.d.invoice.hash,
   "o empregado recebe os dados do talão: Factura-Recibo, 31 800 Kz, três linhas", JSON.stringify(r).slice(0, 300));
 ok(r.d?.company?.nif === "5000000000" && r.d.client?.name === "Consumidor Final" && r.d.settings?.city === "Luanda", "o talão traz a empresa, a cidade e o cliente");
 ok(Math.abs(r.d.items.reduce((t, i) => t + i.total, 0) - r.d.invoice.total) < 0.001, "as linhas do talão somam o total da factura");
-ok(!!(await cozinha.rpc("talao", { p_pedido: pedido })).erro, "a cozinha não imprime talões");
-ok(!!(await publico.rpc("talao", { p_pedido: pedido })).erro, "quem não entrou não lê talões");
+ok(!!(await cozinha.rpc("talao", { p_factura: talao1 })).erro, "a cozinha não imprime talões");
+ok(!!(await publico.rpc("talao", { p_factura: talao1 })).erro, "quem não entrou não lê talões");
 r = await joao.rpc("sala");
 ok(m5().pedido === null, "a mesa 5 volta a ficar livre");
 ok((await publico.rpc("publico_estado", { p_codigo: mesa["5"].codigo })).d?.aberta === false, "para o cliente, a mesa está fechada");
@@ -176,7 +177,7 @@ ok(r.d?.total === 1200 && r.d.invoice_id !== factura1, "venda ao balcão factura
 const engano = (await joao.rpc("abrir_mesa", { p_mesa: mesa["2"].id })).d;
 await joao.rpc("adicionar", { p_pedido: engano, p_item: artigo["Kitaba"], p_quantidade: 1 });
 ok(!(await joao.rpc("cancelar_pedido", { p_pedido: engano })).erro, "uma mesa aberta por engano, sem nada enviado, fecha-se sem factura");
-ok(!!(await joao.rpc("talao", { p_pedido: engano })).erro, "um pedido sem factura não tem talão");
+ok(!!(await joao.rpc("talao", { p_factura: engano })).erro, "um pedido sem factura não tem talão");
 
 // --- pedidos directos e travão
 await dono.mudar("definicoes", `company_id=eq.${empresa}`, { pedidos_directos: true });
@@ -192,7 +193,7 @@ await dono.mudar("definicoes", `company_id=eq.${empresa}`, { pedidos_directos: f
 // --- isolamento entre empresas e público
 await outro.rpc("activar");
 ok(!!(await outro.rpc("pedido", { p_pedido: directa })).erro, "outra empresa não lê um pedido do Kianda");
-ok(!!(await outro.rpc("talao", { p_pedido: pedido })).erro, "outra empresa não lê o talão de uma factura do Kianda");
+ok(!!(await outro.rpc("talao", { p_factura: talao1 })).erro, "outra empresa não lê o talão de uma factura do Kianda");
 ok(!!(await outro.rpc("abrir_mesa", { p_mesa: mesa["4"].id })).erro, "outra empresa não abre uma mesa do Kianda");
 ok(((await outro.ver("mesas")).d ?? []).length === 0, "outra empresa não vê as mesas do Kianda");
 ok(((await outro.ver("pedido_linhas")).d ?? []).length === 0, "outra empresa não vê as linhas dos pedidos");
@@ -220,21 +221,88 @@ ok(!!(await fechar([{ forma: "numerario", valor: 5350.005 }, { forma: "multicaix
 ok((await joao.rpc("pedido", { p_pedido: div })).d?.estado === "aberto", "depois das recusas, a conta continua aberta e sem factura");
 r = await fechar([{ forma: "numerario", valor: 3566.66 }, { forma: "multicaixa", valor: 3566.67 }, { forma: "multicaixa", valor: 3566.67 }]);
 ok(r.d?.total === T && /^FR /.test(r.d.factura_numero ?? "") && r.d.pagamentos?.length === 3, "três pessoas pagam a conta: uma só Factura-Recibo, três partes", JSON.stringify(r));
+const talaoDiv = r.d?.factura_id;
 ok(!!(await fechar([{ forma: "numerario", valor: 5700 }, { forma: "multicaixa", valor: 5000 }])).erro, "uma conta dividida não se fecha duas vezes");
 r = await joao.rpc("pedido", { p_pedido: div });
 ok(r.d?.pagamentos?.length === 3 && r.d.pagamentos[0].forma === "numerario" && r.d.pagamentos[0].valor === 3566.66, "o pedido guarda as partes pela ordem em que foram pagas", JSON.stringify(r.d?.pagamentos));
 r = await joao.rpc("pedido", { p_pedido: pedido });
 ok(r.d?.pagamentos?.length === 1 && r.d.pagamentos[0].valor === 31800, "uma conta paga por uma pessoa tem uma só parte");
-ok((await joao.rpc("talao", { p_pedido: div })).d?.invoice?.total === T, "o talão da conta dividida é o da factura inteira");
+ok((await joao.rpc("talao", { p_factura: talaoDiv })).d?.invoice?.total === T, "o talão da conta dividida é o da factura inteira");
 ok(((await outro.ver("pedido_pagamentos")).d ?? []).length === 0, "outra empresa não vê os pagamentos do Kianda");
 r = await publico.ver("pedido_pagamentos");
 ok(!!r.erro || (r.d ?? []).length === 0, "sem login, os pagamentos não se lêem");
 ok(!!(await joao.criar("pedido_pagamentos", [{ company_id: empresa, pedido_id: div, ordem: 9, forma: "numerario", valor: 1 }])).erro, "ninguém escreve pagamentos à mão");
 
+// --- facturas separadas: cada pessoa paga o que escolheu e leva a sua factura
+r = await joao.rpc("pedido", { p_pedido: pedido });
+ok(r.d?.facturas?.length === 1 && r.d.facturas[0].id === talao1 && r.d.total === 31800 && r.d.pago === 31800, "um pedido fechado mostra a sua factura e o que foi facturado", JSON.stringify(r.d?.facturas));
+const sep = (await joao.rpc("abrir_mesa", { p_mesa: mesa["1"].id, p_pessoas: 3 })).d;
+await joao.rpc("adicionar", { p_pedido: sep, p_item: artigo["Mufete"], p_quantidade: 2 });
+await joao.rpc("adicionar", { p_pedido: sep, p_item: artigo["Cuca"], p_quantidade: 3 });
+await joao.rpc("enviar", { p_pedido: sep });
+r = await joao.rpc("conta", { p_pedido: sep });
+ok(r.d?.total === 22600 && r.d.por_pagar?.length === 2 && r.d.facturas?.length === 0 && r.d.parte === null, "a conta lista o que falta pagar, linha a linha", JSON.stringify(r).slice(0, 300));
+const lMufete = r.d.por_pagar.find((l) => l.nome === "Mufete").id, lCuca = r.d.por_pagar.find((l) => l.nome === "Cuca").id;
+r = await joao.rpc("conta", { p_pedido: sep, p_linhas: [{ linha: lMufete, quantidade: 1 }, { linha: lCuca, quantidade: 1 }] });
+ok(r.d?.parte?.total === 10700 && r.d.total === 22600, "a base calcula a parte de uma pessoa: 10 700 Kz", JSON.stringify(r.d?.parte));
+const parte = (linhas, forma = "numerario", cliente = null) => joao.rpc("facturar_parte", { p_pedido: sep, p_linhas: linhas, p_forma: forma, p_cliente: cliente });
+ok(!!(await parte([{ linha: lMufete, quantidade: 3 }])).erro, "não se factura mais do que falta pagar");
+ok(!!(await parte([])).erro, "é preciso escolher alguma coisa");
+ok(!!(await parte([{ linha: lMufete, quantidade: 0 }])).erro, "uma quantidade a zero é recusada");
+ok(!!(await parte([{ linha: lMufete, quantidade: -1 }, { linha: lMufete, quantidade: 2 }])).erro, "uma quantidade negativa é recusada");
+ok(!!(await parte([{ linha: "abc", quantidade: 1 }])).erro, "uma linha inválida é recusada");
+const linhaDeOutro = (await joao.rpc("pedido", { p_pedido: div })).d.linhas[0].id;
+ok(!!(await parte([{ linha: linhaDeOutro, quantidade: 1 }])).erro, "não se factura aqui uma linha de outro pedido");
+ok(!!(await parte([{ linha: lMufete, quantidade: 1 }], "cheque")).erro, "a parte pede uma forma de pagamento válida");
+ok(!!(await cozinha.rpc("facturar_parte", { p_pedido: sep, p_linhas: [{ linha: lMufete, quantidade: 1 }], p_forma: "numerario" })).erro, "a cozinha não factura");
+ok(!!(await outro.rpc("facturar_parte", { p_pedido: sep, p_linhas: [{ linha: lMufete, quantidade: 1 }], p_forma: "numerario" })).erro, "outra empresa não factura um pedido do Kianda");
+await joao.rpc("adicionar", { p_pedido: sep, p_item: artigo["Água 1,5 L"], p_quantidade: 1 });
+const lAgua = (await joao.rpc("pedido", { p_pedido: sep })).d.linhas.find((l) => l.nome === "Água 1,5 L").id;
+ok(!!(await parte([{ linha: lAgua, quantidade: 1 }])).erro, "um artigo ainda por enviar não se factura");
+ok((await joao.rpc("pedido", { p_pedido: sep })).d?.facturas?.length === 0, "depois das recusas, não saiu nenhuma factura");
+
+const sonangol = (await joao.rpc("clientes", { p_texto: "Sonan" })).d[0].id;
+r = await parte([{ linha: lMufete, quantidade: 1 }, { linha: lCuca, quantidade: 1 }], "multicaixa", sonangol);
+ok(r.d?.total === 10700 && r.d.fechado === false && r.d.falta === 13100 && /^FR /.test(r.d.factura_numero ?? ""), "a primeira pessoa paga 10 700 Kz e leva a sua factura; faltam 13 100 Kz", JSON.stringify(r));
+const sep1 = r.d?.factura_id;
+r = await joao.rpc("talao", { p_factura: sep1 });
+ok(r.d?.invoice?.total === 10700 && r.d.items?.length === 2 && /Sonan/.test(r.d.client?.name ?? ""), "o talão dela tem só o que pagou, em nome do cliente com NIF", JSON.stringify(r).slice(0, 300));
+r = await joao.rpc("pedido", { p_pedido: sep });
+ok(r.d?.estado === "aberto" && r.d.facturas.length === 1 && r.d.pago === 10700 && r.d.total === 13100 && r.d.linhas.find((l) => l.id === lMufete).facturada === 1, "a mesa continua aberta, com o que falta pagar", JSON.stringify(r.d).slice(0, 300));
+r = await joao.rpc("sala");
+ok(r.d.areas.flatMap((a) => a.mesas).find((m) => m.nome === "1").pedido?.total === 13100, "a sala mostra o que falta pagar na mesa");
+ok(!!(await parte([{ linha: lMufete, quantidade: 2 }])).erro, "o que já foi pago não se paga outra vez");
+ok(!!(await dono.rpc("anular_linha", { p_linha: lMufete, p_motivo: "engano" })).erro, "um artigo já facturado não se anula no restaurante");
+ok(!!(await joao.rpc("cancelar_pedido", { p_pedido: sep })).erro, "um pedido com facturas não se cancela");
+r = await parte([{ linha: lCuca, quantidade: 1 }]);
+ok(r.d?.total === 1200 && r.d.fechado === false && r.d.falta === 11900, "a segunda pessoa paga uma Cuca; faltam 11 900 Kz", JSON.stringify(r));
+ok(!!(await joao.rpc("fechar_conta", { p_pedido: sep, p_forma: "numerario" })).erro, "com um artigo por enviar, o resto ainda não se fecha");
+await joao.rpc("enviar", { p_pedido: sep });
+r = await joao.rpc("fechar_conta", { p_pedido: sep, p_forma: null, p_partes: [{ forma: "numerario", valor: 5000 }, { forma: "transferencia", valor: 6900 }] });
+ok(r.d?.total === 11900 && r.d.fechado === true && r.d.pagamentos?.length === 2, "o resto fecha a conta, e também se pode dividir", JSON.stringify(r));
+r = await joao.rpc("pedido", { p_pedido: sep });
+ok(r.d?.estado === "fechado" && r.d.facturas.length === 3 && r.d.total === 23800 && r.d.pagamentos.length === 4 && new Set(r.d.facturas.map((f) => f.numero)).size === 3, "a mesa fecha com três facturas diferentes, 23 800 Kz ao todo", JSON.stringify(r.d?.facturas));
+ok(Math.abs(r.d.facturas.reduce((t, f) => t + f.total, 0) - 23800) < 0.005 && r.d.linhas.every((l) => l.estado === "anulado" || l.facturada === l.quantidade), "as facturas somam o total e não fica nada por facturar");
+ok((await joao.rpc("sala")).d.areas.flatMap((a) => a.mesas).find((m) => m.nome === "1").pedido === null, "a mesa 1 volta a ficar livre");
+
+// uma só pessoa a pagar tudo por escolha também fecha o pedido
+const b2 = (await joao.rpc("abrir_balcao")).d;
+await joao.rpc("adicionar", { p_pedido: b2, p_item: artigo["Cuca"], p_quantidade: 1 });
+await joao.rpc("enviar", { p_pedido: b2 });
+const lB2 = (await joao.rpc("conta", { p_pedido: b2 })).d.por_pagar[0].id;
+r = await joao.rpc("facturar_parte", { p_pedido: b2, p_linhas: [{ linha: lB2, quantidade: 1 }], p_forma: "numerario" });
+ok(r.d?.total === 1200 && r.d.fechado === true && r.d.falta === 0, "quando a escolha cobre tudo, o pedido fecha", JSON.stringify(r));
+ok(((await outro.ver("pedido_facturas")).d ?? []).length === 0, "outra empresa não vê as facturas do restaurante Kianda");
+r = await publico.ver("pedido_facturas");
+ok(!!r.erro || (r.d ?? []).length === 0, "sem login, as facturas não se lêem");
+ok(!!(await outro.rpc("talao", { p_factura: sep1 })).erro, "outra empresa não lê o talão de uma factura separada");
+ok(!!(await joao.criar("pedido_facturas", [{ company_id: empresa, pedido_id: sep, ordem: 9, factura_numero: "FR X/1", total: 1 }])).erro, "ninguém escreve facturas à mão");
+
 // --- fecho do dia
 r = await dono.rpc("fecho_do_dia");
-ok(r.d?.total === 43700 && r.d.contas === 3 && r.d.divididas === 1 && r.d.por_forma.numerario === 35366.66 && r.d.por_forma.multicaixa === 8333.34, "fecho do dia: 43 700 Kz em três contas, uma dividida, por forma de pagamento", JSON.stringify(r.d));
-ok(Object.values(r.d.por_forma).reduce((t, v) => t + v, 0) === r.d.total, "as formas de pagamento somam o total do dia");
+ok(r.d?.total === 68700 && r.d.contas === 5 && r.d.facturas === 7 && r.d.divididas === 2 && r.d.separadas === 1, "fecho do dia: 68 700 Kz, cinco contas, sete facturas, duas divididas, uma com facturas separadas", JSON.stringify(r.d));
+ok(r.d.por_forma.numerario === 42766.66 && r.d.por_forma.multicaixa === 19033.34 && r.d.por_forma.transferencia === 6900, "fecho do dia por forma de pagamento", JSON.stringify(r.d?.por_forma));
+ok(Math.abs(Object.values(r.d.por_forma).reduce((t, v) => t + v, 0) - r.d.total) < 0.005, "as formas de pagamento somam o total do dia");
 ok(!!(await joao.rpc("fecho_do_dia")).erro, "o fecho do dia é só para o gerente");
 
 console.log(`\n${passou} passaram, ${falhou} falharam`);

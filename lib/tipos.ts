@@ -27,7 +27,10 @@ export interface PedidoResumo {
   aberto_em: string;
   chamada_em: string | null;
   conta_pedida_em: string | null;
+  /** O que falta pagar (pedido em curso) ou o que foi facturado (pedido fechado). */
   total: number;
+  /** O que já foi facturado, quando há facturas separadas. */
+  pago: number;
   por_confirmar: number;
   por_enviar: number;
   prontos: number;
@@ -48,14 +51,15 @@ export interface Linha {
   estado: EstadoLinha;
   origem: "equipa" | "cliente";
   estacao_id: string | null;
+  /** Quanto desta linha já foi facturado (facturas separadas). */
+  facturada: number;
   criado_em: string;
   anulado_motivo: string | null;
 }
 
 export interface Pedido extends PedidoResumo {
   linhas: Linha[];
-  factura_numero: string | null;
-  invoice_id: string | null;
+  facturas: FacturaDoPedido[];
   pagamentos: Pagamento[];
   fechado_em: string | null;
 }
@@ -95,10 +99,31 @@ export interface Conta {
   subtotal: number;
   iva: number;
   total: number;
+  /** Linhas ainda por pagar, uma a uma, para as facturas separadas. */
+  por_pagar: { id: string; nome: string; nota: string | null; quantidade: number; preco: number }[];
+  facturas: FacturaDoPedido[];
+  /** Totais da parte escolhida, quando se pede a conta de uma escolha. */
+  parte: { subtotal: number; iva: number; total: number } | null;
   cliente: { id: string; nome: string; nif: string } | null;
 }
 
-export interface Factura { invoice_id: string; factura_numero: string; total: number; public_token: string; pagamentos: Pagamento[] }
+/** Uma Factura-Recibo já emitida para um pedido (uma só, ou várias nas contas separadas). */
+export interface FacturaDoPedido { id: string; invoice_id: string | null; numero: string; cliente: string | null; total: number; criado_em: string; pagamentos: Pagamento[] }
+
+/** O que a base devolve ao emitir uma factura. `fechado` diz se o pedido ficou fechado; `falta` é o que sobra por pagar. */
+export interface Factura {
+  factura_id: string;
+  invoice_id: string;
+  factura_numero: string;
+  total: number;
+  public_token: string;
+  pagamentos: Pagamento[];
+  fechado: boolean;
+  falta: number;
+}
+
+/** O que uma pessoa escolhe pagar numa conta separada. */
+export interface Escolha { linha: string; quantidade: number }
 
 export interface MenuPublico { restaurante: string; mesa: string; pode_pedir: boolean; categorias: Categoria[] }
 export interface EstadoPublico {
