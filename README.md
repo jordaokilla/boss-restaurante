@@ -38,7 +38,7 @@ npm install
 npm run dev
 ```
 
-Por omissão a aplicação liga-se à **base de testes** (`lib/config.ts`) e mostra uma faixa a avisar. Em produção (Vercel, ambiente Production) `NEXT_PUBLIC_SUPABASE_URL` e `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` apontam para o projecto do BOSS, que tem o esquema `restaurante` exposto na API (Supabase › Settings › API › Exposed schemas).
+Por omissão a aplicação liga-se à **base de testes** (`lib/config.ts`) e mostra uma faixa a avisar. Em produção (Vercel, ambiente Production) `NEXT_PUBLIC_SUPABASE_URL` e `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` apontam para o projecto do BOSS, que tem o esquema `restaurante` exposto na API. A lista de esquemas expostos vive na base, no papel `authenticator` (`pgrst.db_schemas`), e manda sobre a de Settings › API do Supabase.
 
 Verificações antes de enviar:
 
