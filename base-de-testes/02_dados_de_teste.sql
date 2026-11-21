@@ -12,6 +12,9 @@ begin
     (v_emp, 'Restaurante Kianda (teste)', '5000000000', 'Rua da Missão, 12, Ingombota'),
     (v_outra, 'Outra Empresa (teste)', '5000000001', null);
   insert into public.billing_settings (company_id, city, phone) values (v_emp, 'Luanda', '923 000 000');
+  -- O Kianda está no BOSS Start (um módulo); a outra empresa no BOSS Professional (vários).
+  insert into public.company_subscriptions (company_id, plan_type, expires_at) values
+    (v_emp, 'start', now() + interval '1 year'), (v_outra, 'basic', now() + interval '1 year');
   for r in select * from (values
       ('dono@kianda.teste', 'Ana Dona', v_emp, 'owner'),
       ('joao@kianda.teste', 'João Empregado', v_emp, null),

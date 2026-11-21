@@ -18,6 +18,9 @@ function cliente(token) {
   const ler = async (r) => { const t = await r.text(); let d = null; try { d = t ? JSON.parse(t) : null; } catch { d = t; } return r.ok ? { d } : { erro: d?.message ?? String(t), estado: r.status }; };
   return {
     rpc: async (fn, args = {}) => ler(await fetch(`${URL}/rest/v1/rpc/${fn}`, { method: "POST", headers: { ...h, "Content-Profile": "restaurante" }, body: JSON.stringify(args) })),
+    // funções e tabelas do BOSS (esquema public): os módulos e, só na base de testes, a troca de plano
+    pub: async (fn, args = {}) => ler(await fetch(`${URL}/rest/v1/rpc/${fn}`, { method: "POST", headers: h, body: JSON.stringify(args) })),
+    verPub: async (tabela, q = "select=*") => ler(await fetch(`${URL}/rest/v1/${tabela}?${q}`, { headers: h })),
     ver: async (tabela, q = "select=*") => ler(await fetch(`${URL}/rest/v1/${tabela}?${q}`, { headers: { ...h, "Accept-Profile": "restaurante" } })),
     criar: async (tabela, linhas) => ler(await fetch(`${URL}/rest/v1/${tabela}`, { method: "POST", headers: { ...h, "Content-Profile": "restaurante", Prefer: "return=representation" }, body: JSON.stringify(linhas) })),
     mudar: async (tabela, q, patch) => ler(await fetch(`${URL}/rest/v1/${tabela}?${q}`, { method: "PATCH", headers: { ...h, "Content-Profile": "restaurante", Prefer: "return=representation" }, body: JSON.stringify(patch) })),
@@ -32,15 +35,40 @@ const sem = cliente(await entrar("semacesso@kianda.teste"));
 const outro = cliente(await entrar("dono@outra.teste"));
 const publico = cliente(null);
 
+// --- módulos: que planos podem ligar o restaurante
+const modulo = (st, nome = "restaurante") => st?.modulos?.find((m) => m.modulo === nome);
+let r = await dono.pub("company_modules_status");
+ok(r.d?.plano === "start" && r.d.limite === 1 && r.d.pode_gerir === true && modulo(r.d)?.estado === "desligado" && modulo(r.d)?.bloqueio === null,
+  "BOSS Start: o dono pode ligar um módulo e o restaurante ainda está desligado", JSON.stringify(r));
+ok(modulo(r.d, "hotel")?.disponivel === false && r.d.modulos.length === 5, "os outros módulos aparecem, mas ainda não se podem ligar");
+ok((await joao.pub("company_modules_status")).d?.pode_gerir === false, "um empregado vê os módulos mas não os gere");
+ok(!!(await publico.pub("company_modules_status")).erro, "sem login, os módulos não se lêem");
+ok(!!(await joao.pub("company_module_activate", { p_module: "restaurante" })).erro, "um empregado não liga módulos");
+await dono.pub("teste_definir_plano", { p_plano: "solo" });
+r = await dono.rpc("eu");
+ok(r.d?.modulo === "desligado" && /BOSS Start/.test(r.d.bloqueio ?? ""), "BOSS Solo: o dono vê que os módulos são a partir do BOSS Start", JSON.stringify(r.d));
+r = await dono.rpc("activar", { p_nome: "Restaurante Kianda" });
+ok(/BOSS Start/.test(r.erro ?? ""), "no BOSS Solo, o restaurante não se liga", JSON.stringify(r));
+await dono.pub("teste_definir_plano", { p_plano: "facturacao" });
+ok(!!(await dono.rpc("activar")).erro && !!(await dono.pub("company_module_activate", { p_module: "restaurante" })).erro, "no BOSS Factura, o restaurante não se liga (por nenhum dos dois caminhos)");
+await dono.pub("teste_definir_plano", { p_plano: "start", p_dias: -1 });
+r = await dono.rpc("activar");
+ok(/subscrição/i.test(r.erro ?? ""), "com a subscrição caducada, o restaurante não se liga", JSON.stringify(r));
+await dono.pub("teste_definir_plano", { p_plano: "start" });
+ok(/disponível/.test((await dono.pub("company_module_activate", { p_module: "hotel" })).erro ?? ""), "um módulo que ainda não existe não se liga");
+ok(!!(await dono.pub("company_module_activate", { p_module: "xpto" })).erro, "um módulo inventado é recusado");
+ok(((await dono.verPub("company_modules")).d ?? []).length === 0, "depois das recusas, nenhum módulo ficou ligado");
+
 // --- ligar o restaurante e montar a equipa
-let r = await dono.rpc("eu");
-ok(r.d?.activo === false && r.d?.gere_empresa === true, "antes de ligar: o dono vê o restaurante desligado");
+r = await dono.rpc("eu");
+ok(r.d?.activo === false && r.d?.gere_empresa === true && r.d.bloqueio === null, "antes de ligar: o dono vê o restaurante desligado e pode ligá-lo");
 r = await joao.rpc("activar");
 ok(!!r.erro, "um empregado não consegue ligar o restaurante");
 r = await dono.rpc("activar", { p_nome: "Restaurante Kianda" });
 ok(r.d?.activo === true && r.d?.papel === "gerente" && r.d?.estacoes?.length === 2, "o dono liga o restaurante: gerente, com Cozinha e Bar", JSON.stringify(r));
 const [estCozinha, estBar] = ["cozinha", "bar"].map((t) => r.d.estacoes.find((e) => e.tipo === t).id);
 const empresa = r.d.company_id;
+ok(r.d.modulo === "activo" && modulo((await dono.pub("company_modules_status")).d)?.estado === "activo", "ligar o restaurante regista o módulo na empresa");
 
 r = await joao.rpc("sala");
 ok(!!r.erro, "sem papel no restaurante, o João não vê a sala");
@@ -304,6 +332,58 @@ ok(r.d?.total === 68700 && r.d.contas === 5 && r.d.facturas === 7 && r.d.dividid
 ok(r.d.por_forma.numerario === 42766.66 && r.d.por_forma.multicaixa === 19033.34 && r.d.por_forma.transferencia === 6900, "fecho do dia por forma de pagamento", JSON.stringify(r.d?.por_forma));
 ok(Math.abs(Object.values(r.d.por_forma).reduce((t, v) => t + v, 0) - r.d.total) < 0.005, "as formas de pagamento somam o total do dia");
 ok(!!(await joao.rpc("fecho_do_dia")).erro, "o fecho do dia é só para o gerente");
+
+// --- módulos: a subscrição caduca a meio do serviço
+const mesaLivre = async (nome) => (await joao.rpc("sala")).d.areas.flatMap((a) => a.mesas).find((m) => m.nome === nome);
+const aberta = (await joao.rpc("abrir_mesa", { p_mesa: mesa["2"].id })).d;
+await joao.rpc("adicionar", { p_pedido: aberta, p_item: artigo["Cuca"], p_quantidade: 1 });
+await joao.rpc("enviar", { p_pedido: aberta });
+await dono.pub("teste_definir_plano", { p_plano: "start", p_dias: -1 });
+r = await dono.rpc("eu");
+ok(r.d?.modulo === "suspenso" && r.d.activo === true && /subscrição/i.test(r.d.bloqueio ?? ""), "subscrição caducada: o módulo fica suspenso e a equipa continua a entrar", JSON.stringify(r.d));
+r = await joao.rpc("abrir_mesa", { p_mesa: mesa["4"].id });
+ok(/plano/i.test(r.erro ?? ""), "suspenso: não se abrem mesas novas", JSON.stringify(r));
+ok(!!(await joao.rpc("abrir_balcao")).erro, "suspenso: não se abrem vendas ao balcão");
+ok((await joao.rpc("abrir_mesa", { p_mesa: mesa["2"].id })).d === aberta, "suspenso: a mesa que já estava aberta continua a abrir-se");
+ok(!(await joao.rpc("adicionar", { p_pedido: aberta, p_item: artigo["Cuca"], p_quantidade: 1 })).erro && (await joao.rpc("enviar", { p_pedido: aberta })).d === 1, "suspenso: a mesa aberta ainda recebe o que falta servir");
+r = await joao.rpc("fechar_conta", { p_pedido: aberta, p_forma: "numerario" });
+ok(r.d?.total === 2400 && r.d.fechado === true, "suspenso: as contas abertas fecham-se e facturam-se", JSON.stringify(r));
+ok((await publico.rpc("publico_menu", { p_codigo: mesa["5"].codigo })).d?.mesa === "5", "suspenso: o menu do QR continua a ver-se");
+await dono.pub("teste_definir_plano", { p_plano: "solo" });
+ok((await dono.rpc("eu")).d?.modulo === "suspenso" && !!(await joao.rpc("abrir_balcao")).erro, "descer para o BOSS Solo também suspende o módulo");
+await dono.pub("teste_definir_plano", { p_plano: "start" });
+const volta = await joao.rpc("abrir_balcao");
+ok(!volta.erro && (await dono.rpc("eu")).d?.modulo === "activo", "renovar o BOSS Start volta a abrir vendas");
+
+// --- módulos: desligar e voltar a ligar
+r = await dono.pub("company_module_deactivate", { p_module: "restaurante" });
+ok(/contas abertas/.test(r.erro ?? ""), "com contas abertas, o módulo não se desliga", JSON.stringify(r));
+await joao.rpc("cancelar_pedido", { p_pedido: volta.d });
+ok(!!(await joao.pub("company_module_deactivate", { p_module: "restaurante" })).erro, "um empregado não desliga módulos");
+const directaAberta = await mesaLivre("3");
+if (directaAberta?.pedido) await joao.rpc("fechar_conta", { p_pedido: directaAberta.pedido.id, p_forma: "numerario" });
+r = await dono.pub("company_module_deactivate", { p_module: "restaurante" });
+ok(modulo(r.d)?.estado === "desligado", "o dono desliga o restaurante", JSON.stringify(r));
+ok(!!(await joao.rpc("sala")).erro && !!(await cozinha.rpc("fila", { p_estacao: estCozinha })).erro, "desligado: a equipa deixa de entrar");
+r = await joao.rpc("eu");
+ok(r.d?.activo === false && r.d.papel === null && r.d.modulo === "desligado", "desligado: o empregado vê o restaurante desligado");
+ok((await publico.rpc("publico_menu", { p_codigo: mesa["5"].codigo })).d === null, "desligado: o QR da mesa deixa de responder");
+ok(!!(await publico.rpc("publico_chamar", { p_codigo: mesa["5"].codigo, p_tipo: "empregado" })).erro, "desligado: o cliente não chama o empregado");
+r = await dono.rpc("eu");
+ok(r.d?.activo === false && r.d.ja_configurado === true && r.d.bloqueio === null, "desligado: o dono vê que pode voltar a ligar");
+r = await dono.rpc("activar");
+ok(r.d?.activo === true && r.d.restaurante?.nome === "Restaurante Kianda", "voltar a ligar: o restaurante volta com o mesmo nome", JSON.stringify(r.d));
+r = await joao.rpc("sala");
+ok(r.d?.areas?.flatMap((a) => a.mesas).length === 6 && (await joao.rpc("menu")).d?.flatMap((c) => c.itens).length > 0, "voltar a ligar: mesas, menu e equipa estão como estavam");
+ok((await dono.rpc("fecho_do_dia")).d?.total > 68700, "voltar a ligar: as vendas do dia continuam lá");
+
+// --- módulos: isolamento e planos sem limite
+r = await outro.pub("company_modules_status");
+ok(r.d?.plano === "basic" && r.d.limite === null && modulo(r.d)?.estado === "activo", "BOSS Professional: sem limite de módulos, e o restaurante da outra empresa está ligado", JSON.stringify(r));
+r = await dono.verPub("company_modules", "select=company_id,module,active");
+ok(r.d?.length === 1 && r.d[0].company_id === empresa, "cada empresa só lê os seus módulos", JSON.stringify(r));
+ok(!!(await dono.verPub("company_subscriptions")).erro || ((await dono.verPub("company_subscriptions")).d ?? []).length === 0, "as subscrições não se lêem directamente");
+ok(!!(await joao.pub("modules_plan", { p_company: empresa })).erro && !!(await joao.pub("company_module_state", { p_company: empresa, p_module: "restaurante" })).erro, "as funções internas dos módulos não se chamam de fora");
 
 console.log(`\n${passou} passaram, ${falhou} falharam`);
 process.exit(falhou ? 1 : 0);

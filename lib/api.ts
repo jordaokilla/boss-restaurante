@@ -25,6 +25,12 @@ async function rpcPublico<T>(fn: string, args?: Record<string, unknown>): Promis
 /** Tabelas de configuração (salas, mesas, menu, equipa): leitura da equipa, escrita só do gerente (RLS). */
 export const tabela = (nome: string) => supabase().schema("restaurante").from(nome);
 
+/** Módulos da empresa no BOSS (esquema public): desligar o restaurante. Ligar faz-se por `api.activar`. */
+export async function desligarRestaurante(): Promise<void> {
+  const { error } = await supabase().rpc("company_module_deactivate", { p_module: "restaurante" });
+  if (error) throw error;
+}
+
 export const api = {
   eu: () => rpc<Eu | null>("eu"),
   activar: (nome: string) => rpc<Eu>("activar", { p_nome: nome }),

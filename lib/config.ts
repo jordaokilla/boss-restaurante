@@ -8,6 +8,9 @@ export const SUPABASE_KEY =
 
 const BOSS_URL = "https://dobrnawzvftlquhyonkn.supabase.co";
 
+/** Onde a empresa muda de plano ou renova a subscrição. */
+export const PLANOS_DO_BOSS = "https://app.boss.ao/plans";
+
 /** A aplicação está ligada à base de testes, e não à do BOSS. */
 export const BASE_DE_TESTES = SUPABASE_URL !== BOSS_URL;
 

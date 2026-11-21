@@ -4,7 +4,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import QRCode from "qrcode";
 import { ENDERECO_PUBLICO } from "@/lib/config";
-import { api, mensagem, tabela } from "@/lib/api";
+import { api, mensagem, tabela, desligarRestaurante } from "@/lib/api";
 import { FORMA, kz, PAPEL } from "@/lib/formato";
 import { useSessao } from "@/lib/sessao";
 import type { Estacao, Eu, Forma, Papel } from "@/lib/tipos";
@@ -442,6 +442,50 @@ function Definicoes({ eu }: { eu: Eu }) {
           ))}
         </div>
       </fieldset>
+      {eu.gere_empresa && <Desligar />}
+    </div>
+  );
+}
+
+/** Desliga o módulo Restaurante na empresa (dono ou gestor). Os dados ficam guardados. */
+function Desligar() {
+  const { recarregar } = useSessao();
+  const [aConfirmar, setAConfirmar] = useState(false);
+  const [ocupado, setOcupado] = useState(false);
+  const [erro, setErro] = useState<string | null>(null);
+  return (
+    <div className="card p-4">
+      <p className="text-[15px] font-semibold">Desligar o BOSS Restaurante</p>
+      <p className="mt-0.5 text-sm text-muted">
+        A equipa deixa de entrar e os QR das mesas deixam de responder. Mesas, menu, equipa e vendas ficam guardados e voltam se o ligar outra vez.
+        As facturas já emitidas continuam no BOSS.
+      </p>
+      <Erro texto={erro} />
+      {aConfirmar ? (
+        <div className="mt-3 flex flex-wrap gap-2">
+          <button
+            type="button"
+            className="btn btn-danger btn-sm"
+            disabled={ocupado}
+            onClick={async () => {
+              setOcupado(true);
+              setErro(null);
+              try {
+                await desligarRestaurante();
+                await recarregar();
+              } catch (err) {
+                setErro(mensagem(err));
+                setOcupado(false);
+              }
+            }}
+          >
+            {ocupado ? "A desligar…" : "Sim, desligar"}
+          </button>
+          <button type="button" className="btn btn-ghost btn-sm" disabled={ocupado} onClick={() => setAConfirmar(false)}>Cancelar</button>
+        </div>
+      ) : (
+        <button type="button" className="btn btn-ghost btn-sm mt-3" onClick={() => setAConfirmar(true)}>Desligar o restaurante</button>
+      )}
     </div>
   );
 }

@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useEffect } from "react";
 import { LogOut } from "lucide-react";
-import { BASE_DE_TESTES } from "@/lib/config";
+import { BASE_DE_TESTES, PLANOS_DO_BOSS } from "@/lib/config";
 import { PAPEL } from "@/lib/formato";
 import { useSessao } from "@/lib/sessao";
 import type { Eu, Papel } from "@/lib/tipos";
@@ -91,7 +91,12 @@ export function Moldura({ papeis, children }: { papeis: Papel[]; children: (eu: 
   }
   if (!eu.activo) {
     return (
-      <Aviso titulo="Restaurante por ligar" texto={`O restaurante ainda não está ligado em ${eu.empresa}. Peça ao dono ou a um gestor da empresa para o ligar.`}>
+      <Aviso
+        titulo={eu.ja_configurado ? "Restaurante desligado" : "Restaurante por ligar"}
+        texto={eu.ja_configurado
+          ? `O BOSS Restaurante está desligado em ${eu.empresa}. O dono ou um gestor da empresa pode voltar a ligá-lo.`
+          : `O restaurante ainda não está ligado em ${eu.empresa}. Peça ao dono ou a um gestor da empresa para o ligar.`}
+      >
         <button type="button" className="btn btn-ghost" onClick={sair}>Sair</button>
       </Aviso>
     );
@@ -132,6 +137,14 @@ export function Moldura({ papeis, children }: { papeis: Papel[]; children: (eu: 
         </div>
         <Navegacao eu={eu} />
       </header>
+      {eu.modulo === "suspenso" && (
+        <div className="border-b border-line bg-danger-soft print:hidden" role="status">
+          <p className="container-x py-2.5 text-sm font-medium text-danger">
+            O plano da empresa já não inclui o BOSS Restaurante. Pode fechar as contas abertas, mas não abrir novas.{" "}
+            {eu.gere_empresa ? <a className="font-bold underline" href={PLANOS_DO_BOSS}>Renovar ou subir de plano</a> : "Fale com o dono ou um gestor da empresa."}
+          </p>
+        </div>
+      )}
       <main className="container-x flex-1 py-5">{children(eu)}</main>
     </>
   );

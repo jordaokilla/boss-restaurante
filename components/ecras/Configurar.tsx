@@ -3,6 +3,7 @@ import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { api, mensagem } from "@/lib/api";
+import { PLANOS_DO_BOSS } from "@/lib/config";
 import { useSessao } from "@/lib/sessao";
 import { Aviso, Carregar } from "@/components/Moldura";
 
@@ -25,12 +26,22 @@ export function Configurar() {
   const eu = estado.eu;
   if (!eu.gere_empresa) {
     return (
-      <Aviso titulo="Restaurante por ligar" texto={`Só o dono ou um gestor de ${eu.empresa ?? "a empresa"} pode ligar o restaurante.`}>
+      <Aviso titulo={eu.ja_configurado ? "Restaurante desligado" : "Restaurante por ligar"} texto={`Só o dono ou um gestor de ${eu.empresa ?? "a empresa"} pode ligar o restaurante.`}>
+        <button type="button" className="btn btn-ghost" onClick={sair}>Sair</button>
+      </Aviso>
+    );
+  }
+  // O plano da empresa não deixa ligar o módulo (BOSS Factura ou Solo, subscrição terminada, limite de módulos).
+  if (eu.bloqueio) {
+    return (
+      <Aviso titulo="O plano não inclui o BOSS Restaurante" texto={eu.bloqueio}>
+        <a className="btn btn-primary" href={PLANOS_DO_BOSS}>Ver os planos</a>
         <button type="button" className="btn btn-ghost" onClick={sair}>Sair</button>
       </Aviso>
     );
   }
   const valor = nome ?? eu.empresa ?? "";
+  const voltar = eu.ja_configurado;
 
   return (
     <div className="flex min-h-screen items-center justify-center px-4 py-10">
@@ -52,19 +63,29 @@ export function Configurar() {
       >
         <div className="flex items-center gap-3">
           <Image src="/boss.png" alt="BOSS" width={96} height={96} className="h-11 w-11 rounded-xl" priority />
-          <h1 className="h-title">Ligar o BOSS Restaurante</h1>
+          <h1 className="h-title">{voltar ? "Voltar a ligar o BOSS Restaurante" : "Ligar o BOSS Restaurante"}</h1>
         </div>
-        <p className="text-[15px] text-muted">
-          O restaurante fica ligado a <strong className="text-ink">{eu.empresa}</strong>: usa os produtos, os clientes e a facturação
-          que a empresa já tem no BOSS. A seguir cria as mesas, monta o menu e dá um papel a cada pessoa da equipa.
-        </p>
-        <div>
-          <label className="field-label" htmlFor="c-nome">Nome do restaurante</label>
-          <input id="c-nome" className="field" value={valor} onChange={(e) => setNome(e.target.value)} required maxLength={80} />
-          <p className="hint">É o nome que os clientes vêem no menu do telemóvel.</p>
-        </div>
+        {voltar ? (
+          <p className="text-[15px] text-muted">
+            O restaurante de <strong className="text-ink">{eu.empresa}</strong> está desligado. Ao ligar, volta tudo como estava:
+            mesas, menu, equipa e vendas.
+          </p>
+        ) : (
+          <>
+            <p className="text-[15px] text-muted">
+              O restaurante fica ligado a <strong className="text-ink">{eu.empresa}</strong>: usa os produtos, os clientes e a facturação
+              que a empresa já tem no BOSS. A seguir cria as mesas, monta o menu e dá um papel a cada pessoa da equipa.
+            </p>
+            <div>
+              <label className="field-label" htmlFor="c-nome">Nome do restaurante</label>
+              <input id="c-nome" className="field" value={valor} onChange={(e) => setNome(e.target.value)} required maxLength={80} />
+              <p className="hint">É o nome que os clientes vêem no menu do telemóvel.</p>
+            </div>
+          </>
+        )}
         {erro && <p className="text-sm font-medium text-danger" role="alert">{erro}</p>}
-        <button type="submit" className="btn btn-primary w-full" disabled={ocupado || !valor.trim()}>{ocupado ? "A ligar…" : "Ligar o restaurante"}</button>
+        <button type="submit" className="btn btn-primary w-full" disabled={ocupado || !valor.trim()}>{ocupado ? "A ligar…" : voltar ? "Voltar a ligar" : "Ligar o restaurante"}</button>
+        <button type="button" className="btn btn-ghost w-full" onClick={sair}>Sair</button>
       </form>
     </div>
   );

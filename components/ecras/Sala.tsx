@@ -105,7 +105,7 @@ export function Sala({ eu }: { eu: Eu }) {
           <h1 className="h-title">Sala</h1>
           <p className="text-sm text-muted">{ocupadas === 1 ? "1 mesa ocupada" : `${ocupadas} mesas ocupadas`}</p>
         </div>
-        <button type="button" className="btn btn-strong" disabled={aAbrir !== null} onClick={() => abrir(api.abrirBalcao, "balcao")}>
+        <button type="button" className="btn btn-strong" disabled={aAbrir !== null || eu.modulo === "suspenso"} onClick={() => abrir(api.abrirBalcao, "balcao")}>
           <Plus size={18} aria-hidden />
           Venda ao balcão
         </button>

@@ -8,7 +8,14 @@ export interface Eu {
   company_id: string | null;
   empresa: string | null;
   gere_empresa: boolean;
+  /** O restaurante está configurado e o módulo não está desligado. */
   activo: boolean;
+  /** Estado do módulo Restaurante na empresa: «suspenso» = o plano já não o inclui (só se fecha o que está aberto). */
+  modulo: "activo" | "suspenso" | "desligado";
+  /** O restaurante já foi configurado alguma vez (voltar a ligar traz tudo de volta). */
+  ja_configurado: boolean;
+  /** Porque é que o módulo não se pode ligar agora (plano, subscrição); nulo = pode. */
+  bloqueio: string | null;
   papel: Papel | null;
   restaurante: { nome: string; cliente_pode_pedir: boolean; pedidos_directos: boolean; largura_talao: 58 | 80 } | null;
   estacoes: Estacao[];

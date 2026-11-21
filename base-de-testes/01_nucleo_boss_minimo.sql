@@ -11,8 +11,21 @@ create table public.companies (
   plan text,
   nif text,
   address text,
+  is_demo boolean not null default false,
   created_at timestamptz not null default now()
 );
+
+-- Subscrição da empresa (plano e prazo): é o que diz quantos módulos a empresa pode ter.
+create table public.company_subscriptions (
+  id uuid primary key default gen_random_uuid(),
+  company_id uuid not null references public.companies (id) on delete cascade,
+  plan_type text not null,
+  status text not null default 'active',
+  is_trial boolean default false,
+  started_at timestamptz not null default now(),
+  expires_at timestamptz not null
+);
+alter table public.company_subscriptions enable row level security;
 
 create table public.profiles (
   id uuid primary key references auth.users (id) on delete cascade,
@@ -234,3 +247,19 @@ alter table public.invoice_audit_log enable row level security;
 alter table public.invoice_payments enable row level security;
 alter table public.invoice_series enable row level security;
 alter table public.billing_settings enable row level security;
+
+-- Só na base de testes: muda o plano da empresa de quem chama, para provar as regras dos módulos
+-- (plano que não inclui módulos, subscrição caducada). `p_dias` negativo = já caducou.
+create or replace function public.teste_definir_plano(p_plano text, p_dias int default 30) returns void
+language plpgsql security definer set search_path = public as $$
+declare v_emp uuid := public.get_user_company_id(auth.uid());
+begin
+  if v_emp is null then raise exception 'Sem empresa.'; end if;
+  delete from public.company_subscriptions where company_id = v_emp;
+  if p_plano is not null then
+    insert into public.company_subscriptions (company_id, plan_type, expires_at)
+    values (v_emp, p_plano, now() + make_interval(days => p_dias));
+  end if;
+end $$;
+revoke all on function public.teste_definir_plano(text, int) from public, anon;
+grant execute on function public.teste_definir_plano(text, int) to authenticated;
