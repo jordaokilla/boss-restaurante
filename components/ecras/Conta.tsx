@@ -8,6 +8,7 @@ import { FORMA, kz, nomeDoPedido, quantidade } from "@/lib/formato";
 import type { Conta as ContaT, Eu, Factura, Forma } from "@/lib/tipos";
 import { Carregar, Moldura } from "@/components/Moldura";
 import { Folha } from "@/components/Folha";
+import { BotaoTalao } from "@/components/BotaoTalao";
 
 type Cliente = { id: string; nome: string; nif: string };
 
@@ -50,7 +51,7 @@ function EscolherCliente({ onEscolher }: { onEscolher: (c: Cliente) => void }) {
 }
 
 export function Conta({ eu }: { eu: Eu }) {
-  void eu;
+  const largura = eu.restaurante?.largura_talao ?? 80;
   const id = useSearchParams().get("p") ?? "";
   const [conta, setConta] = useState<ContaT | null>(null);
   const [erro, setErro] = useState<string | null>(null);
@@ -96,7 +97,8 @@ export function Conta({ eu }: { eu: Eu }) {
           <p className="mt-1 text-[15px] text-muted">{nome} · {kz(factura.total)} · {forma ? FORMA[forma] : ""}</p>
           <p className="mt-4 rounded-xl bg-divider px-4 py-3 font-mono text-sm">{factura.factura_numero}</p>
           <p className="mt-3 text-sm text-muted">A Factura-Recibo já está no BOSS, em Facturas. O envio à AGT segue em segundo plano.</p>
-          <Link href="/sala" className="btn btn-primary mt-5 w-full">Voltar à sala</Link>
+          <div className="mt-5"><BotaoTalao pedido={id} largura={largura} /></div>
+          <Link href="/sala" className="btn btn-ghost mt-2 w-full">Voltar à sala</Link>
         </div>
       </div>
     );
@@ -115,7 +117,10 @@ export function Conta({ eu }: { eu: Eu }) {
       </div>
 
       {fechado ? (
-        <p className="card p-5 text-[15px] text-muted">Esta conta já está fechada.</p>
+        <div className="card p-5">
+          <p className="text-[15px] text-muted">{conta.pedido.estado === "fechado" ? "Esta conta já está fechada." : "Este pedido foi anulado."}</p>
+          {conta.pedido.estado === "fechado" && <div className="mt-3"><BotaoTalao pedido={id} largura={largura} className="btn btn-ghost btn-sm" /></div>}
+        </div>
       ) : (
         <>
           <ul className="card divide-y divide-divider px-4">

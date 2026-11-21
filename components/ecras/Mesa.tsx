@@ -9,6 +9,7 @@ import { ESTADO_LINHA, hora, kz, nomeDoPedido, quantidade } from "@/lib/formato"
 import type { Categoria, Eu, Linha, Pedido } from "@/lib/tipos";
 import { Carregar, Moldura } from "@/components/Moldura";
 import { Folha } from "@/components/Folha";
+import { BotaoTalao } from "@/components/BotaoTalao";
 
 const COR_ESTADO: Record<Linha["estado"], string> = {
   por_confirmar: "text-accent-text",
@@ -166,7 +167,10 @@ export function Mesa({ eu }: { eu: Eu }) {
       {!emCurso && (
         <div className="card p-5">
           <p className="font-display font-bold">{pedido.estado === "fechado" ? `Conta fechada · ${pedido.factura_numero}` : "Pedido anulado"}</p>
-          <Link href="/sala" className="btn btn-ghost btn-sm mt-3">Voltar à sala</Link>
+          <div className="mt-3 flex flex-wrap items-start gap-2">
+            {pedido.estado === "fechado" && <div><BotaoTalao pedido={pedido.id} largura={eu.restaurante?.largura_talao ?? 80} className="btn btn-primary btn-sm" /></div>}
+            <Link href="/sala" className="btn btn-ghost btn-sm">Voltar à sala</Link>
+          </div>
         </div>
       )}
 

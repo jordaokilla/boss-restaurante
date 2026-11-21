@@ -37,7 +37,7 @@ function CartaoMesa({ mesa, agora, onAbrir, ocupado }: { mesa: MesaSala; agora: 
       )}
       <span className="font-display text-xl leading-none font-bold">{mesa.nome}</span>
       {!p ? (
-        <span className="text-xs text-muted">Livre · {mesa.lugares} lugares</span>
+        <span className="text-xs leading-tight text-muted">Livre<span className="block">{mesa.lugares} lugares</span></span>
       ) : (
         <span className="space-y-0.5">
           {alerta.length > 0 && <span className={`block text-xs font-bold ${conta ? "text-accent" : "text-danger"}`}>{alerta.join(" · ")}</span>}

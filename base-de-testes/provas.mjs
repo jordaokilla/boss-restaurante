@@ -148,6 +148,15 @@ r = await joao.rpc("fechar_conta", { p_pedido: pedido, p_forma: "numerario" });
 ok(r.d?.total === 31800 && /^FR /.test(r.d.factura_numero ?? ""), "o empregado fecha a conta e sai a Factura-Recibo", JSON.stringify(r));
 const factura1 = r.d?.invoice_id;
 ok(!!(await joao.rpc("fechar_conta", { p_pedido: pedido, p_forma: "numerario" })).erro, "a mesma conta não se fecha duas vezes");
+
+// --- o talão da factura
+r = await joao.rpc("talao", { p_pedido: pedido });
+ok(r.d?.invoice?.document_type === "FR" && r.d.invoice.total === 31800 && r.d.items?.length === 3 && !!r.d.invoice.hash,
+  "o empregado recebe os dados do talão: Factura-Recibo, 31 800 Kz, três linhas", JSON.stringify(r).slice(0, 300));
+ok(r.d?.company?.nif === "5000000000" && r.d.client?.name === "Consumidor Final" && r.d.settings?.city === "Luanda", "o talão traz a empresa, a cidade e o cliente");
+ok(Math.abs(r.d.items.reduce((t, i) => t + i.total, 0) - r.d.invoice.total) < 0.001, "as linhas do talão somam o total da factura");
+ok(!!(await cozinha.rpc("talao", { p_pedido: pedido })).erro, "a cozinha não imprime talões");
+ok(!!(await publico.rpc("talao", { p_pedido: pedido })).erro, "quem não entrou não lê talões");
 r = await joao.rpc("sala");
 ok(m5().pedido === null, "a mesa 5 volta a ficar livre");
 ok((await publico.rpc("publico_estado", { p_codigo: mesa["5"].codigo })).d?.aberta === false, "para o cliente, a mesa está fechada");
@@ -167,6 +176,7 @@ ok(r.d?.total === 1200 && r.d.invoice_id !== factura1, "venda ao balcão factura
 const engano = (await joao.rpc("abrir_mesa", { p_mesa: mesa["2"].id })).d;
 await joao.rpc("adicionar", { p_pedido: engano, p_item: artigo["Kitaba"], p_quantidade: 1 });
 ok(!(await joao.rpc("cancelar_pedido", { p_pedido: engano })).erro, "uma mesa aberta por engano, sem nada enviado, fecha-se sem factura");
+ok(!!(await joao.rpc("talao", { p_pedido: engano })).erro, "um pedido sem factura não tem talão");
 
 // --- pedidos directos e travão
 await dono.mudar("definicoes", `company_id=eq.${empresa}`, { pedidos_directos: true });
@@ -182,6 +192,7 @@ await dono.mudar("definicoes", `company_id=eq.${empresa}`, { pedidos_directos: f
 // --- isolamento entre empresas e público
 await outro.rpc("activar");
 ok(!!(await outro.rpc("pedido", { p_pedido: directa })).erro, "outra empresa não lê um pedido do Kianda");
+ok(!!(await outro.rpc("talao", { p_pedido: pedido })).erro, "outra empresa não lê o talão de uma factura do Kianda");
 ok(!!(await outro.rpc("abrir_mesa", { p_mesa: mesa["4"].id })).erro, "outra empresa não abre uma mesa do Kianda");
 ok(((await outro.ver("mesas")).d ?? []).length === 0, "outra empresa não vê as mesas do Kianda");
 ok(((await outro.ver("pedido_linhas")).d ?? []).length === 0, "outra empresa não vê as linhas dos pedidos");

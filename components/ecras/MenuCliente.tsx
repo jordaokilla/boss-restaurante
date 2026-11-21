@@ -11,8 +11,8 @@ type Carrinho = Record<string, { artigo: Artigo; quantidade: number; nota: strin
 
 const ESTADO_CLIENTE: Record<string, string> = {
   por_confirmar: "À espera do empregado",
-  enviado: "Na cozinha",
-  a_preparar: "A preparar",
+  enviado: "Em preparação",
+  a_preparar: "Em preparação",
   pronto: "Pronto",
   servido: "Servido",
 };

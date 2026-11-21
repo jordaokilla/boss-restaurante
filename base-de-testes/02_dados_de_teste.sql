@@ -8,7 +8,10 @@ declare
   v_senha text := current_setting('teste.senha');
   r record; v_id uuid;
 begin
-  insert into public.companies (id, name, nif) values (v_emp, 'Restaurante Kianda (teste)', '5000000000'), (v_outra, 'Outra Empresa (teste)', '5000000001');
+  insert into public.companies (id, name, nif, address) values
+    (v_emp, 'Restaurante Kianda (teste)', '5000000000', 'Rua da Missão, 12, Ingombota'),
+    (v_outra, 'Outra Empresa (teste)', '5000000001', null);
+  insert into public.billing_settings (company_id, city, phone) values (v_emp, 'Luanda', '923 000 000');
   for r in select * from (values
       ('dono@kianda.teste', 'Ana Dona', v_emp, 'owner'),
       ('joao@kianda.teste', 'João Empregado', v_emp, null),
@@ -36,11 +39,11 @@ begin
     (v_emp, 'Mufete', 'Peixe grelhado, feijão de óleo de palma, banana e mandioca', 8333.33, 14, 'Pratos', false),
     (v_emp, 'Calulu de peixe', 'Peixe seco e fresco, quiabos e funge', 7017.54, 14, 'Pratos', false),
     (v_emp, 'Bife à casa', 'Com batata frita e ovo', 9649.12, 14, 'Pratos', false),
-    (v_emp, 'Funge com moamba', 'Galinha rija em moamba de ginguba', 6578.95, 14, 'Pratos', false),
+    (v_emp, 'Funge com moamba', 'Galinha rija em moamba de ginguba', 6578.94, 14, 'Pratos', false),
     (v_emp, 'Kitaba', 'Pasta de ginguba torrada', 2192.98, 14, 'Entradas', false),
     (v_emp, 'Cuca', 'Cerveja 33 cl', 1052.63, 14, 'Bebidas', true),
     (v_emp, 'Água 1,5 L', null, 1052.63, 14, 'Bebidas', true),
-    (v_emp, 'Sumo de múcua', 'Natural', 1754.39, 14, 'Bebidas', false),
+    (v_emp, 'Sumo de múcua', 'Natural', 1754.38, 14, 'Bebidas', false),
     (v_emp, 'Doce de ginguba', null, 2631.58, 14, 'Sobremesas', false),
     (v_emp, 'Serviço de consultoria', 'Não é do restaurante', 50000, 14, 'Serviços', false),
     (v_outra, 'Produto da outra empresa', null, 1000, 14, null, false);

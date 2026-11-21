@@ -96,9 +96,25 @@ create table public.warehouses (
   updated_at timestamptz not null default now()
 );
 
+create table public.invoice_series (
+  id uuid primary key default gen_random_uuid(),
+  company_id uuid not null references public.companies (id) on delete cascade,
+  document_type text not null,
+  agt_series_code text
+);
+
+create table public.billing_settings (
+  id uuid primary key default gen_random_uuid(),
+  company_id uuid not null unique references public.companies (id) on delete cascade,
+  city text,
+  phone text,
+  agt_certificate_number text
+);
+
 create table public.invoices (
   id uuid primary key default gen_random_uuid(),
   company_id uuid not null references public.companies (id) on delete cascade,
+  series_id uuid references public.invoice_series (id),
   client_id uuid not null references public.billing_clients (id),
   document_type text not null default 'FT',
   invoice_number integer not null,
@@ -216,3 +232,5 @@ alter table public.invoices enable row level security;
 alter table public.invoice_items enable row level security;
 alter table public.invoice_audit_log enable row level security;
 alter table public.invoice_payments enable row level security;
+alter table public.invoice_series enable row level security;
+alter table public.billing_settings enable row level security;
