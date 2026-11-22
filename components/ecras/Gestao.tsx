@@ -429,6 +429,7 @@ function Definicoes({ eu }: { eu: Eu }) {
       </form>
       <div className="card divide-y divide-divider px-4">
         {linha("O cliente pode pedir pelo telemóvel", "Desligado, o QR mostra só o menu.", r.cliente_pode_pedir, "cliente_pode_pedir")}
+        {linha("Pedir o código da mesa ao cliente", "O cliente escreve uma vez o código de 4 algarismos que o empregado lhe dá ao abrir a mesa. Assim, uma fotografia do QR não serve fora do restaurante.", r.codigo_visita, "codigo_visita")}
         {linha("Pedidos do cliente vão directos para a cozinha", "Desligado, o empregado confirma cada pedido antes. Ligue só se confiar no uso que os clientes fazem do QR.", r.pedidos_directos, "pedidos_directos")}
       </div>
       <fieldset className="card p-4">

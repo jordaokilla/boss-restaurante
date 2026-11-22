@@ -147,11 +147,32 @@ ok((await joao.rpc("avancar", { p_linhas: [cuca, ...linhasCozinha], p_estado: "s
 // --- menu por QR
 r = await publico.rpc("publico_menu", { p_codigo: mesa["5"].codigo });
 ok(r.d?.mesa === "5" && r.d.categorias.length === 4 && r.d.restaurante === "Restaurante Kianda", "o cliente lê o QR e vê o menu da mesa 5", JSON.stringify(r).slice(0, 200));
+ok(r.d?.codigo_visita === true, "o menu diz que esta mesa pede o código da visita");
 ok((await publico.rpc("publico_menu", { p_codigo: "codigo-inventado" })).d === null, "um código inventado não mostra nada");
 ok(!!(await publico.rpc("publico_pedir", { p_codigo: mesa["1"].codigo, p_linhas: [{ item: artigo["Mufete"], quantidade: 1 }] })).erro, "o cliente não consegue pedir numa mesa que o empregado não abriu");
+
+// --- código da visita: uma fotografia do QR não chega para pedir
+r = await publico.rpc("publico_estado", { p_codigo: mesa["5"].codigo });
+ok(r.d?.aberta === true && r.d.precisa_codigo === true && r.d.linhas === undefined && r.d.total === undefined, "só com o QR, vê-se que a mesa está aberta mas não o que ela pediu", JSON.stringify(r).slice(0, 160));
+r = await publico.rpc("publico_pedir", { p_codigo: mesa["5"].codigo, p_linhas: [{ item: artigo["Calulu de peixe"], quantidade: 1 }] });
+ok(/código da mesa/.test(r.erro ?? ""), "só com o QR, o cliente não consegue pedir", JSON.stringify(r));
+ok(!!(await publico.rpc("publico_chamar", { p_codigo: mesa["5"].codigo, p_tipo: "conta" })).erro, "nem pedir a conta ou chamar o empregado");
+const visita5 = (await joao.rpc("pedido", { p_pedido: pedido })).d?.codigo_visita;
+ok(/^\d{4}$/.test(visita5 ?? ""), "o empregado vê no ecrã da mesa o código de 4 algarismos", String(visita5));
+const errado = (v) => String((Number(v) + 1) % 10000).padStart(4, "0");
+r = await publico.rpc("publico_entrar", { p_codigo: mesa["5"].codigo, p_visita: errado(visita5) });
+ok(r.d?.ok === false && r.d.motivo === "errado" && r.d.chave === undefined, "um código errado não entra", JSON.stringify(r));
+r = await publico.rpc("publico_entrar", { p_codigo: mesa["1"].codigo, p_visita: visita5 });
+ok(r.d?.ok === false && r.d.motivo === "fechada", "numa mesa que não está aberta, não há código que sirva", JSON.stringify(r));
+r = await publico.rpc("publico_entrar", { p_codigo: mesa["5"].codigo, p_visita: visita5 });
+ok(r.d?.ok === true && (r.d.chave ?? "").length >= 20, "com o código certo, o telemóvel recebe a chave da visita", JSON.stringify(r).slice(0, 80));
+const chave5 = r.d?.chave;
+ok(/código da mesa/.test((await publico.rpc("publico_pedir", { p_codigo: mesa["5"].codigo, p_linhas: [{ item: artigo["Calulu de peixe"], quantidade: 1 }], p_chave: "chave-inventada" })).erro ?? ""), "uma chave inventada não serve");
+ok(!!(await publico.rpc("publico_pedir", { p_codigo: mesa["5"].codigo, p_linhas: [{ item: artigo["Calulu de peixe"], quantidade: 1 }], p_chave: visita5 })).erro, "o código de 4 algarismos não se usa no lugar da chave");
+
 await dono.mudar("menu_itens", `id=eq.${artigo["Doce de ginguba"]}`, { esgotado: true });
-ok(!!(await publico.rpc("publico_pedir", { p_codigo: mesa["5"].codigo, p_linhas: [{ item: artigo["Doce de ginguba"], quantidade: 1 }] })).erro, "um artigo esgotado não se consegue pedir");
-r = await publico.rpc("publico_pedir", { p_codigo: mesa["5"].codigo, p_linhas: [{ item: artigo["Calulu de peixe"], quantidade: 1, nota: "Pouco sal", preco: 1 }] });
+ok(!!(await publico.rpc("publico_pedir", { p_codigo: mesa["5"].codigo, p_linhas: [{ item: artigo["Doce de ginguba"], quantidade: 1 }], p_chave: chave5 })).erro, "um artigo esgotado não se consegue pedir");
+r = await publico.rpc("publico_pedir", { p_codigo: mesa["5"].codigo, p_linhas: [{ item: artigo["Calulu de peixe"], quantidade: 1, nota: "Pouco sal", preco: 1 }], p_chave: chave5 });
 ok(r.d?.linhas === 1 && r.d.confirmacao === true, "o cliente pede um calulu; fica à espera do empregado", JSON.stringify(r));
 r = await joao.rpc("pedido", { p_pedido: pedido });
 ok(r.d.por_confirmar === 1 && r.d.total === 23800, "o pedido do cliente aparece por confirmar e ainda não entra no total", `${r.d.por_confirmar} ${r.d.total}`);
@@ -160,12 +181,12 @@ ok((await cozinha.rpc("fila", { p_estacao: estCozinha })).d.every((t) => !t.linh
 ok(!!(await joao.rpc("fechar_conta", { p_pedido: pedido, p_forma: "numerario" })).erro, "não se fecha a conta com um pedido por confirmar");
 ok((await joao.rpc("responder_cliente", { p_pedido: pedido, p_aceitar: true })).d === 1, "o João confirma o pedido do cliente");
 ok((await cozinha.rpc("fila", { p_estacao: estCozinha })).d.some((t) => t.linhas.some((l) => l.nome === "Calulu de peixe")), "agora a cozinha vê o calulu");
-r = await publico.rpc("publico_estado", { p_codigo: mesa["5"].codigo });
+r = await publico.rpc("publico_estado", { p_codigo: mesa["5"].codigo, p_chave: chave5 });
 ok(r.d?.aberta && r.d.linhas.length === 3 && r.d.total === 31800, "o cliente acompanha: três artigos, 31 800 Kz", JSON.stringify(r.d).slice(0, 160));
-ok(!(await publico.rpc("publico_chamar", { p_codigo: mesa["5"].codigo, p_tipo: "conta" })).erro, "o cliente pede a conta pelo telemóvel");
+ok(!(await publico.rpc("publico_chamar", { p_codigo: mesa["5"].codigo, p_tipo: "conta", p_chave: chave5 })).erro, "o cliente pede a conta pelo telemóvel");
 r = await joao.rpc("sala");
 ok(m5().pedido.estado === "conta_pedida" && !!m5().pedido.chamada_em, "a sala mostra a mesa 5 com a conta pedida");
-ok(!!(await publico.rpc("publico_pedir", { p_codigo: mesa["5"].codigo, p_linhas: [{ item: artigo["Cuca"], quantidade: 1 }] })).erro, "com a conta pedida, o cliente já não pede mais");
+ok(/conta desta mesa/.test((await publico.rpc("publico_pedir", { p_codigo: mesa["5"].codigo, p_linhas: [{ item: artigo["Cuca"], quantidade: 1 }], p_chave: chave5 })).erro ?? ""), "com a conta pedida, o cliente já não pede mais");
 
 // --- a conta e a factura
 r = await joao.rpc("conta", { p_pedido: pedido });
@@ -210,13 +231,41 @@ ok(!!(await joao.rpc("talao", { p_factura: engano })).erro, "um pedido sem factu
 // --- pedidos directos e travão
 await dono.mudar("definicoes", `company_id=eq.${empresa}`, { pedidos_directos: true });
 const directa = (await joao.rpc("abrir_mesa", { p_mesa: mesa["3"].id })).d;
-r = await publico.rpc("publico_pedir", { p_codigo: mesa["3"].codigo, p_linhas: [{ item: artigo["Sumo de múcua"], quantidade: 2 }] });
+const visita3 = (await joao.rpc("pedido", { p_pedido: directa })).d?.codigo_visita;
+ok((await publico.rpc("publico_estado", { p_codigo: mesa["3"].codigo, p_chave: chave5 })).d?.precisa_codigo === true, "a chave de uma visita não serve noutra mesa");
+const chave3 = (await publico.rpc("publico_entrar", { p_codigo: mesa["3"].codigo, p_visita: ` ${visita3} ` })).d?.chave;
+ok(!!chave3 && chave3 !== chave5, "cada visita tem a sua chave");
+r = await publico.rpc("publico_pedir", { p_codigo: mesa["3"].codigo, p_linhas: [{ item: artigo["Sumo de múcua"], quantidade: 2 }], p_chave: chave3 });
 ok(r.d?.confirmacao === false, "com «pedidos directos» ligado, o pedido do cliente não espera confirmação");
 ok((await bar.rpc("fila", { p_estacao: estBar })).d.some((t) => t.mesa_nome === "3"), "e chega logo ao bar");
 let travou = false;
-for (let i = 0; i < 9 && !travou; i++) travou = !!(await publico.rpc("publico_pedir", { p_codigo: mesa["3"].codigo, p_linhas: [{ item: artigo["Sumo de múcua"], quantidade: 1 }] })).erro;
+for (let i = 0; i < 9 && !travou; i++) travou = /Demasiados pedidos/.test((await publico.rpc("publico_pedir", { p_codigo: mesa["3"].codigo, p_linhas: [{ item: artigo["Sumo de múcua"], quantidade: 1 }], p_chave: chave3 })).erro ?? "");
 ok(travou, "muitos pedidos seguidos da mesma mesa são travados");
 await dono.mudar("definicoes", `company_id=eq.${empresa}`, { pedidos_directos: false });
+
+// --- código da visita: tentativas a mais, visita seguinte e restaurante que o dispensa
+let motivos = [];
+for (let i = 0; i < 8; i++) motivos.push((await publico.rpc("publico_entrar", { p_codigo: mesa["3"].codigo, p_visita: errado(visita3) })).d?.motivo);
+ok(motivos.every((m) => m === "errado"), "oito códigos errados seguidos são recusados um a um", motivos.join(","));
+r = await publico.rpc("publico_entrar", { p_codigo: mesa["3"].codigo, p_visita: visita3 });
+ok(r.d?.ok === false && r.d.motivo === "bloqueado", "depois disso, nem o código certo entra durante uns minutos (não se adivinha por tentativas)", JSON.stringify(r));
+ok(Array.isArray((await publico.rpc("publico_estado", { p_codigo: mesa["3"].codigo, p_chave: chave3 })).d?.linhas), "quem já tinha entrado continua a acompanhar a mesa");
+const visitaA = (await joao.rpc("abrir_mesa", { p_mesa: mesa["2"].id })).d;
+const chaveA = (await publico.rpc("publico_entrar", { p_codigo: mesa["2"].codigo, p_visita: (await joao.rpc("pedido", { p_pedido: visitaA })).d?.codigo_visita })).d?.chave;
+ok(Array.isArray((await publico.rpc("publico_estado", { p_codigo: mesa["2"].codigo, p_chave: chaveA })).d?.linhas), "na mesa 2, o cliente entra com o código desta visita");
+await joao.rpc("cancelar_pedido", { p_pedido: visitaA });
+const visitaB = (await joao.rpc("abrir_mesa", { p_mesa: mesa["2"].id })).d;
+ok((await publico.rpc("publico_estado", { p_codigo: mesa["2"].codigo, p_chave: chaveA })).d?.precisa_codigo === true, "na visita seguinte da mesma mesa, a chave antiga já não serve");
+await dono.mudar("definicoes", `company_id=eq.${empresa}`, { codigo_visita: false });
+r = await publico.rpc("publico_estado", { p_codigo: mesa["2"].codigo });
+ok(r.d?.aberta === true && Array.isArray(r.d.linhas) && r.d.precisa_codigo === undefined, "restaurante que dispensa o código: basta o QR, como antes", JSON.stringify(r));
+ok((await joao.rpc("pedido", { p_pedido: visitaB })).d?.codigo_visita === null && (await publico.rpc("publico_menu", { p_codigo: mesa["2"].codigo })).d?.codigo_visita === false, "e o empregado deixa de ver código na mesa");
+ok(!(await publico.rpc("publico_chamar", { p_codigo: mesa["2"].codigo, p_tipo: "empregado" })).erro, "sem código, o cliente chama o empregado só com o QR");
+await joao.mudar("definicoes", `company_id=eq.${empresa}`, { codigo_visita: true });
+ok((await dono.rpc("eu")).d?.restaurante?.codigo_visita === false, "um empregado não muda esta definição");
+await dono.mudar("definicoes", `company_id=eq.${empresa}`, { codigo_visita: true });
+ok((await dono.rpc("eu")).d?.restaurante?.codigo_visita === true, "o gerente volta a ligar o código");
+ok(!(await joao.rpc("cancelar_pedido", { p_pedido: visitaB })).erro, "a mesa 2 aberta para a prova fecha-se sem factura");
 
 // --- isolamento entre empresas e público
 await outro.rpc("activar");

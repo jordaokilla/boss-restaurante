@@ -19,7 +19,7 @@ export interface Eu {
   /** Porque é que o módulo não se pode ligar agora (plano, subscrição); nulo = pode. */
   bloqueio: string | null;
   papel: Papel | null;
-  restaurante: { nome: string; cliente_pode_pedir: boolean; pedidos_directos: boolean; largura_talao: 58 | 80 } | null;
+  restaurante: { nome: string; cliente_pode_pedir: boolean; pedidos_directos: boolean; codigo_visita: boolean; largura_talao: 58 | 80 } | null;
   estacoes: Estacao[];
 }
 
@@ -36,6 +36,8 @@ export interface PedidoResumo {
   aberto_em: string;
   chamada_em: string | null;
   conta_pedida_em: string | null;
+  /** Código de 4 algarismos que o empregado diz ao cliente para pedir pelo QR; nulo quando não se usa. */
+  codigo_visita: string | null;
   /** O que falta pagar (pedido em curso) ou o que foi facturado (pedido fechado). */
   total: number;
   /** O que já foi facturado, quando há facturas separadas. */
@@ -134,11 +136,16 @@ export interface Factura {
 /** O que uma pessoa escolhe pagar numa conta separada. */
 export interface Escolha { linha: string; quantidade: number }
 
-export interface MenuPublico { restaurante: string; mesa: string; pode_pedir: boolean; categorias: Categoria[] }
+export interface MenuPublico { restaurante: string; mesa: string; pode_pedir: boolean; codigo_visita: boolean; categorias: Categoria[] }
 export interface EstadoPublico {
   aberta: boolean;
+  /** A mesa está aberta, mas este telemóvel ainda não escreveu o código da visita. */
+  precisa_codigo?: boolean;
   estado?: EstadoPedido;
   chamada?: boolean;
   total?: number;
   linhas?: { nome: string; quantidade: number; nota: string | null; estado: EstadoLinha; preco: number }[];
 }
+
+/** Resposta ao código da visita: a chave que o telemóvel guarda, ou porque não entrou. */
+export type EntradaPublica = { ok: true; chave: string | null } | { ok: false; motivo: "fechada" | "errado" | "bloqueado" };

@@ -174,6 +174,11 @@ export function Mesa({ eu }: { eu: Eu }) {
               {pedido.pessoas ? `${pedido.pessoas} pessoas · ` : ""}aberta às {hora(pedido.aberto_em)}
               {pedido.estado === "conta_pedida" && " · conta pedida"}
             </p>
+            {emCurso && pedido.codigo_visita && (
+              <p className="mt-1 text-sm">
+                Código para o cliente pedir pelo telemóvel: <strong className="font-display text-base tracking-[0.2em]">{pedido.codigo_visita}</strong>
+              </p>
+            )}
           </div>
         </div>
         <span className="pill text-sm">{kz(pedido.total)}</span>

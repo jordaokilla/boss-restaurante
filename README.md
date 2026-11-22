@@ -15,6 +15,7 @@ Regras que o código segue:
 - A aplicação só fala com a base pelas funções do esquema `restaurante` (`lib/api.ts`). Não escreve em tabelas do BOSS.
 - O restaurante toca no BOSS por cinco guichés, todos dentro dessas funções: ler produtos, ler clientes, ler quem é a empresa e a equipa, emitir a Factura-Recibo (o mesmo caminho da Venda rápida) e ler os dados do talão dessa factura.
 - O público (menu por QR) só usa as funções `publico_*`, com o código da mesa. Não lê tabelas.
+- O QR da mesa é fixo, por isso não chega para pedir: cada abertura de mesa tem um código de 4 algarismos (`pedidos.codigo_visita`), que o empregado vê no ecrã da mesa e diz ao cliente. O cliente escreve-o uma vez (`publico_entrar`) e o telemóvel guarda a chave dessa visita (`chave_visita`), que segue em `publico_estado`, `publico_pedir` e `publico_chamar`. Sem a chave, o QR só mostra o menu e diz que a mesa está aberta. Oito códigos errados em dez minutos fecham a entrada nessa mesa até a janela acabar; quem já entrou continua. O restaurante pode dispensar o código em Gestão › Definições (`definicoes.codigo_visita`).
 - Preços, IVA e totais calculam-se na base, nunca no navegador.
 - Um pedido pode ter várias Facturas-Recibo (`restaurante.pedido_facturas`): nas facturas separadas, `facturar_parte` emite a de cada pessoa e `pedido_linhas.facturada` guarda o que já foi pago; o pedido fecha quando não sobra nada. O total da parte de cada pessoa calcula-se na base (`conta` com `p_linhas`).
 - A conta dividida é uma só Factura-Recibo com várias partes de pagamento (`restaurante.pedido_pagamentos`). As contas da divisão fazem-se em cêntimos (`lib/partes.ts`) e a base confere que as partes somam o total.
@@ -30,7 +31,7 @@ Regras que o código segue:
 - `/sala`: mesas por sala, venda ao balcão. `/mesa?p=…`: o pedido. `/conta?p=…`: fechar a conta e imprimir o talão. Três maneiras de pagar: uma pessoa paga tudo; dividir a conta (uma só factura, várias partes de pagamento); facturas separadas (cada pessoa paga os artigos que escolher e leva a sua factura, com o seu NIF se quiser; a mesa fica aberta até não sobrar nada).
 - `/estacao?id=…`: fila da cozinha ou do bar, ao vivo.
 - `/gestao`: mesas e QR, menu, equipa, definições e fecho do dia. `/gestao/qr`: folha de QR para imprimir.
-- `/m?c=…`: menu do cliente (sem login): ver o menu, pedir, chamar o empregado, pedir a conta.
+- `/m?c=…`: menu do cliente (sem login): ver o menu e, depois de escrever o código da mesa, pedir, chamar o empregado, pedir a conta.
 
 ## Desenvolvimento
 
@@ -56,7 +57,7 @@ npx next build
 1. `01_nucleo_boss_minimo.sql`: réplica mínima das tabelas e funções do BOSS de que o restaurante depende.
 2. A migração do restaurante (do repositório `appbossao`).
 3. `02_dados_de_teste.sql`: duas empresas, utilizadores e produtos de exemplo.
-4. `provas.mjs`: as provas pela API, com logins reais (papéis, isolamento entre empresas, pedidos do cliente, factura, talão, conta dividida, facturas separadas, balcão e fecho do dia).
+4. `provas.mjs`: as provas pela API, com logins reais (papéis, isolamento entre empresas, pedidos do cliente, código da visita, factura, talão, conta dividida, facturas separadas, balcão e fecho do dia).
 
 ```bash
 URL=https://<projecto>.supabase.co CHAVE=<chave publicável> SENHA=<senha de teste> node base-de-testes/provas.mjs

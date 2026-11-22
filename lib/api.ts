@@ -1,6 +1,6 @@
 "use client";
 import { supabase, supabasePublico } from "./supabase";
-import type { Categoria, Conta, Escolha, EstadoPublico, Eu, Factura, Forma, MenuPublico, Pagamento, Pedido, Sala, Talao } from "./tipos";
+import type { Categoria, Conta, EntradaPublica, Escolha, EstadoPublico, Eu, Factura, Forma, MenuPublico, Pagamento, Pedido, Sala, Talao } from "./tipos";
 
 /** Mensagem para a pessoa: a da base (já em português) ou uma genérica quando a falha é de rede. */
 export function mensagem(err: unknown): string {
@@ -71,8 +71,11 @@ export const api = {
 
 export const publico = {
   menu: (codigo: string) => rpcPublico<MenuPublico | null>("publico_menu", { p_codigo: codigo }),
-  estado: (codigo: string) => rpcPublico<EstadoPublico | null>("publico_estado", { p_codigo: codigo }),
-  pedir: (codigo: string, linhas: { item: string; quantidade: number; nota?: string }[]) =>
-    rpcPublico<{ linhas: number; confirmacao: boolean }>("publico_pedir", { p_codigo: codigo, p_linhas: linhas }),
-  chamar: (codigo: string, tipo: "empregado" | "conta") => rpcPublico<void>("publico_chamar", { p_codigo: codigo, p_tipo: tipo }),
+  /** O cliente escreve o código que o empregado lhe deu; a resposta traz a chave desta visita. */
+  entrar: (codigo: string, visita: string) => rpcPublico<EntradaPublica>("publico_entrar", { p_codigo: codigo, p_visita: visita }),
+  estado: (codigo: string, chave: string | null) => rpcPublico<EstadoPublico | null>("publico_estado", { p_codigo: codigo, p_chave: chave }),
+  pedir: (codigo: string, linhas: { item: string; quantidade: number; nota?: string }[], chave: string | null) =>
+    rpcPublico<{ linhas: number; confirmacao: boolean }>("publico_pedir", { p_codigo: codigo, p_linhas: linhas, p_chave: chave }),
+  chamar: (codigo: string, tipo: "empregado" | "conta", chave: string | null) =>
+    rpcPublico<void>("publico_chamar", { p_codigo: codigo, p_tipo: tipo, p_chave: chave }),
 };

@@ -1,6 +1,6 @@
 "use client";
 import { useSearchParams } from "next/navigation";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { Minus, Plus } from "lucide-react";
 import { mensagem, publico } from "@/lib/api";
 import { ESTADO_LINHA, kz, quantidade } from "@/lib/formato";
@@ -16,6 +16,24 @@ const ESTADO_CLIENTE: Record<string, string> = {
   pronto: "Pronto",
   servido: "Servido",
 };
+
+// A chave da visita fica no telemóvel enquanto a mesa estiver aberta: escreve-se o código uma só vez.
+const guarda = (codigo: string) => `boss-rest:visita:${codigo}`;
+function lerChave(codigo: string): string | null {
+  try {
+    return window.localStorage.getItem(guarda(codigo));
+  } catch {
+    return null;
+  }
+}
+function guardarChave(codigo: string, chave: string | null) {
+  try {
+    if (chave) window.localStorage.setItem(guarda(codigo), chave);
+    else window.localStorage.removeItem(guarda(codigo));
+  } catch {
+    /* sem armazenamento (navegação privada): a chave vive só nesta página */
+  }
+}
 
 function Centro({ titulo, texto }: { titulo: string; texto: string }) {
   return (
@@ -39,11 +57,20 @@ export function MenuCliente() {
   const [ocupado, setOcupado] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
   const [aviso, setAviso] = useState<string | null>(null);
+  const chave = useRef<string | null>(null);
+  const [visita, setVisita] = useState("");
+  const [erroVisita, setErroVisita] = useState<string | null>(null);
 
   const lerEstado = useCallback(async () => {
     if (!codigo) return;
     try {
-      setEstado(await publico.estado(codigo));
+      const e = await publico.estado(codigo, chave.current);
+      // A visita acabou (a mesa fechou ou voltou a abrir): a chave guardada já não serve.
+      if (e && (e.precisa_codigo || !e.aberta) && chave.current) {
+        chave.current = null;
+        guardarChave(codigo, null);
+      }
+      setEstado(e);
     } catch {
       /* fica o último estado conhecido */
     }
@@ -56,6 +83,7 @@ export function MenuCliente() {
       .then((r) => r.json())
       .then((j) => vivo && setMenu(j.menu ?? null))
       .catch(() => vivo && setMenu(null));
+    chave.current = lerChave(codigo);
     const primeiro = setTimeout(lerEstado, 0);
     const id = setInterval(() => document.visibilityState === "visible" && lerEstado(), 10000);
     const visivel = () => document.visibilityState === "visible" && lerEstado();
@@ -77,7 +105,8 @@ export function MenuCliente() {
 
   const aberta = estado?.aberta === true;
   const contaPedida = estado?.estado === "conta_pedida";
-  const podePedir = menu.pode_pedir && aberta && !contaPedida;
+  const precisaCodigo = aberta && estado?.precisa_codigo === true;
+  const podePedir = menu.pode_pedir && aberta && !precisaCodigo && !contaPedida;
   const cat = menu.categorias.find((c) => c.id === categoria) ?? menu.categorias[0];
   const linhas = estado?.linhas ?? [];
 
@@ -94,7 +123,7 @@ export function MenuCliente() {
     setOcupado(true);
     setErro(null);
     try {
-      const r = await publico.pedir(codigo, itens.map((i) => ({ item: i.artigo.id, quantidade: i.quantidade, nota: i.nota || undefined })));
+      const r = await publico.pedir(codigo, itens.map((i) => ({ item: i.artigo.id, quantidade: i.quantidade, nota: i.nota || undefined })), chave.current);
       setCarrinho({});
       setAVer(false);
       setAviso(r.confirmacao ? "Pedido enviado. O empregado vai confirmar daqui a pouco." : "Pedido enviado para a cozinha.");
@@ -102,6 +131,32 @@ export function MenuCliente() {
       window.scrollTo({ top: 0, behavior: "smooth" });
     } catch (err) {
       setErro(mensagem(err));
+      await lerEstado();
+    } finally {
+      setOcupado(false);
+    }
+  }
+
+  async function entrarNaMesa(e: FormEvent) {
+    e.preventDefault();
+    setOcupado(true);
+    setErroVisita(null);
+    try {
+      const r = await publico.entrar(codigo, visita);
+      if (r.ok) {
+        chave.current = r.chave;
+        guardarChave(codigo, r.chave);
+        setVisita("");
+        await lerEstado();
+      } else if (r.motivo === "fechada") {
+        await lerEstado();
+      } else {
+        setErroVisita(r.motivo === "bloqueado"
+          ? "Demasiadas tentativas nesta mesa. Aguarde uns minutos ou peça ajuda ao empregado."
+          : "Código errado. Confirme com o empregado.");
+      }
+    } catch (err) {
+      setErroVisita(mensagem(err));
     } finally {
       setOcupado(false);
     }
@@ -111,7 +166,7 @@ export function MenuCliente() {
     setOcupado(true);
     setErro(null);
     try {
-      await publico.chamar(codigo, tipo);
+      await publico.chamar(codigo, tipo, chave.current);
       setAviso(tipo === "conta" ? "A conta foi pedida. O empregado já vem." : "O empregado foi avisado.");
       await lerEstado();
     } catch (err) {
@@ -136,7 +191,32 @@ export function MenuCliente() {
         <p className="mt-3 rounded-xl border border-line bg-surface px-4 py-3 text-sm text-muted">Para pedir pelo telemóvel, peça ao empregado para abrir a mesa. Pode ir vendo o menu.</p>
       )}
 
-      {aberta && linhas.length > 0 && (
+      {precisaCodigo && (
+        <form className="card mt-3 p-4" onSubmit={entrarNaMesa} aria-labelledby="titulo-visita">
+          <h2 id="titulo-visita" className="font-display text-base font-bold">Código da mesa</h2>
+          <p className="mt-1 text-sm text-muted">
+            {menu.pode_pedir ? "Para pedir pelo telemóvel" : "Para chamar o empregado ou acompanhar a conta"}, escreva o código de 4 algarismos desta mesa. O empregado diz-lho.
+          </p>
+          <div className="mt-3 flex gap-2">
+            <label className="sr-only" htmlFor="visita">Código de 4 algarismos</label>
+            <input
+              id="visita"
+              className="field min-w-0 flex-1 text-center font-display text-xl font-bold tracking-[0.4em]"
+              inputMode="numeric"
+              pattern="[0-9]*"
+              autoComplete="off"
+              maxLength={4}
+              placeholder="0000"
+              value={visita}
+              onChange={(e) => setVisita(e.target.value.replace(/\D/g, "").slice(0, 4))}
+            />
+            <button type="submit" className="btn btn-primary" disabled={ocupado || visita.length !== 4}>Entrar</button>
+          </div>
+          {erroVisita && <p className="mt-3 rounded-xl bg-danger-soft px-4 py-3 text-sm font-medium text-danger" role="alert">{erroVisita}</p>}
+        </form>
+      )}
+
+      {aberta && !precisaCodigo && linhas.length > 0 && (
         <section className="card mt-3 p-4" aria-label="O que já foi pedido nesta mesa">
           <div className="flex items-baseline justify-between gap-3">
             <h2 className="font-display text-base font-bold">Pedido desta mesa</h2>
@@ -162,7 +242,7 @@ export function MenuCliente() {
           )}
         </section>
       )}
-      {aberta && linhas.length === 0 && (
+      {aberta && !precisaCodigo && linhas.length === 0 && (
         <button type="button" className="btn btn-ghost btn-sm mt-3" disabled={ocupado} onClick={() => chamar("empregado")}>Chamar empregado</button>
       )}
 
