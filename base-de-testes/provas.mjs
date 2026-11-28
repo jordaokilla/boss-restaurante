@@ -22,6 +22,7 @@ function cliente(token) {
     pub: async (fn, args = {}) => ler(await fetch(`${URL}/rest/v1/rpc/${fn}`, { method: "POST", headers: h, body: JSON.stringify(args) })),
     verPub: async (tabela, q = "select=*") => ler(await fetch(`${URL}/rest/v1/${tabela}?${q}`, { headers: h })),
     ver: async (tabela, q = "select=*") => ler(await fetch(`${URL}/rest/v1/${tabela}?${q}`, { headers: { ...h, "Accept-Profile": "restaurante" } })),
+    criarPub: async (tabela, linhas) => ler(await fetch(`${URL}/rest/v1/${tabela}`, { method: "POST", headers: { ...h, Prefer: "return=representation" }, body: JSON.stringify(linhas) })),
     criar: async (tabela, linhas) => ler(await fetch(`${URL}/rest/v1/${tabela}`, { method: "POST", headers: { ...h, "Content-Profile": "restaurante", Prefer: "return=representation" }, body: JSON.stringify(linhas) })),
     mudar: async (tabela, q, patch) => ler(await fetch(`${URL}/rest/v1/${tabela}?${q}`, { method: "PATCH", headers: { ...h, "Content-Profile": "restaurante", Prefer: "return=representation" }, body: JSON.stringify(patch) })),
   };
@@ -433,6 +434,87 @@ r = await dono.verPub("company_modules", "select=company_id,module,active");
 ok(r.d?.length === 1 && r.d[0].company_id === empresa, "cada empresa só lê os seus módulos", JSON.stringify(r));
 ok(!!(await dono.verPub("company_subscriptions")).erro || ((await dono.verPub("company_subscriptions")).d ?? []).length === 0, "as subscrições não se lêem directamente");
 ok(!!(await joao.pub("modules_plan", { p_company: empresa })).erro && !!(await joao.pub("company_module_state", { p_company: empresa, p_module: "restaurante" })).erro, "as funções internas dos módulos não se chamam de fora");
+
+// --- estabelecimentos: um restaurante por casa; quem gere a empresa põe cada pessoa na sua, no BOSS, e o restaurante só assume
+const fechoEmpresa = (await dono.rpc("fecho_do_dia")).d?.total;
+const idJoao = (await joao.rpc("eu")).d.user_id, idBar = (await bar.rpc("eu")).d.user_id;
+r = await dono.criarPub("establishments", [
+  { company_id: empresa, name: "Kianda Ilha", code: "ILHA", address: "Avenida Murtala Mohammed, Ilha de Luanda", phone: "923 111 111" },
+  { company_id: empresa, name: "Kianda Talatona", code: "TALAT" },
+]);
+const casa = Object.fromEntries((r.d ?? []).map((c) => [c.code, c.id]));
+ok(r.d?.length === 2, "o dono cria dois estabelecimentos no BOSS", JSON.stringify(r));
+ok(!!(await joao.criarPub("establishments", [{ company_id: empresa, name: "Do João", code: "JOAO" }])).erro, "um empregado não cria estabelecimentos");
+r = await joao.rpc("eu");
+ok(r.d?.activo === true && r.d.casa === null && r.d.casas.length === 0 && r.d.restaurante_da_empresa === true && r.d.sem_casa === false,
+  "com estabelecimentos mas sem restaurante neles, a equipa continua no restaurante da empresa", JSON.stringify(r.d));
+await dono.pub("establishment_select", { _establishment: casa.ILHA });
+r = await dono.rpc("eu");
+ok(r.d?.casa?.id === casa.ILHA && r.d.activo === false && r.d.ja_configurado === false && r.d.casas.length === 2 && r.d.preso_a_casas === false,
+  "o dono escolhe a Ilha: o restaurante dela ainda está por ligar", JSON.stringify(r.d));
+r = await dono.rpc("activar", { p_nome: "Kianda Ilha" });
+ok(r.d?.activo === true && r.d.restaurante?.nome === "Kianda Ilha" && r.d.casa?.id === casa.ILHA, "o dono liga o restaurante da Ilha", JSON.stringify(r));
+ok(((await dono.rpc("sala")).d?.areas ?? []).flatMap((a) => a.mesas).length === 0, "o restaurante da Ilha nasce sem as mesas do restaurante da empresa");
+let areaIlha = (await dono.ver("areas")).d?.[0];
+if (!areaIlha) areaIlha = (await dono.criar("areas", [{ company_id: empresa, nome: "Sala" }])).d?.[0];
+ok(areaIlha?.establishment_id === casa.ILHA, "a sala da Ilha fica presa à Ilha", JSON.stringify(areaIlha));
+r = await dono.criar("mesas", [{ company_id: empresa, area_id: areaIlha.id, nome: "1" }]);
+const mesaIlha = r.d?.[0];
+ok(mesaIlha?.establishment_id === casa.ILHA, "a mesa «1» da Ilha convive com a mesa «1» do restaurante da empresa", JSON.stringify(r));
+
+// quem não foi posto em nenhum estabelecimento não escolhe
+await joao.pub("establishment_select", { _establishment: casa.ILHA });
+r = await joao.rpc("eu");
+ok(r.d?.casa === null && r.d.casas.length === 0 && r.d.sem_casa === true, "quem não foi posto em nenhum estabelecimento não escolhe: o restaurante ignora a escolha dele", JSON.stringify(r.d));
+ok(!!(await joao.rpc("abrir_mesa", { p_mesa: mesaIlha.id })).erro, "e não abre mesas da Ilha");
+ok((await joao.rpc("sala")).d?.areas?.flatMap((a) => a.mesas).length === 6, "continua só no restaurante da empresa");
+ok(!!(await joao.criarPub("establishment_members", [{ establishment_id: casa.ILHA, user_id: idJoao, company_id: empresa }])).erro, "ninguém se põe a si próprio num estabelecimento");
+
+// o dono põe o João na Ilha: entra directamente lá
+r = await dono.criarPub("establishment_members", [{ establishment_id: casa.ILHA, user_id: idJoao, company_id: empresa }]);
+ok(r.d?.length === 1, "o dono põe o João na equipa da Ilha", JSON.stringify(r));
+r = await joao.rpc("eu");
+ok(r.d?.casa?.id === casa.ILHA && r.d.casas.length === 1 && r.d.preso_a_casas === true && r.d.sem_casa === false && r.d.papel === "empregado" && r.d.restaurante?.nome === "Kianda Ilha",
+  "o João entra directamente no restaurante da Ilha, sem escolher", JSON.stringify(r.d));
+ok(/equipa/.test((await joao.pub("establishment_select", { _establishment: casa.TALAT })).erro ?? ""), "e não consegue mudar para outro estabelecimento");
+ok((await joao.rpc("sala")).d?.areas?.flatMap((a) => a.mesas).length === 1, "vê só as mesas da Ilha");
+ok(!!(await joao.rpc("abrir_mesa", { p_mesa: mesa["4"].id })).erro, "e já não abre mesas do restaurante da empresa");
+
+// o menu é da empresa; esgotado e escondido valem por estabelecimento
+r = await dono.criar("menu_itens_casa", [{ establishment_id: casa.ILHA, item_id: artigo["Kitaba"], company_id: empresa, esgotado: true }]);
+ok(r.d?.length === 1, "o gerente dá a Kitaba por esgotada só na Ilha", JSON.stringify(r));
+ok((await joao.rpc("menu")).d?.flatMap((c) => c.itens).find((i) => i.id === artigo["Kitaba"])?.esgotado === true, "na Ilha, a Kitaba está esgotada");
+
+// pedido, conta e talão da Ilha
+const pIlha = (await joao.rpc("abrir_mesa", { p_mesa: mesaIlha.id, p_pessoas: 2 })).d;
+await joao.rpc("adicionar", { p_pedido: pIlha, p_item: artigo["Mufete"], p_quantidade: 1 });
+await joao.rpc("enviar", { p_pedido: pIlha });
+r = await joao.rpc("fechar_conta", { p_pedido: pIlha, p_forma: "numerario" });
+ok(r.d?.total === 9500 && /^FR /.test(r.d.factura_numero ?? "") && r.d.fechado === true, "a conta da Ilha fecha com Factura-Recibo", JSON.stringify(r));
+r = await joao.rpc("talao", { p_factura: r.d?.factura_id });
+ok(r.d?.establishment?.name === "Kianda Ilha" && /Ilha de Luanda/.test(r.d.establishment.address ?? "") && r.d.company?.nif === "5000000000",
+  "o talão leva o nome e a morada do estabelecimento e o NIF da empresa", JSON.stringify(r.d?.establishment));
+ok((await dono.rpc("fecho_do_dia")).d?.total === 9500, "o fecho do dia da Ilha só conta a venda da Ilha");
+
+// de volta ao restaurante da empresa: nada da Ilha lá aparece
+await dono.pub("establishment_select", { _establishment: null });
+r = await dono.rpc("eu");
+ok(r.d?.casa === null && r.d.restaurante?.nome === "Restaurante Kianda", "o dono volta ao restaurante da empresa");
+ok((await dono.rpc("fecho_do_dia")).d?.total === fechoEmpresa, "o fecho do dia do restaurante da empresa não conta a venda da Ilha");
+ok((await dono.rpc("menu")).d?.flatMap((c) => c.itens).find((i) => i.id === artigo["Kitaba"])?.esgotado === false, "no restaurante da empresa, a Kitaba continua disponível");
+r = await dono.rpc("equipa_lista");
+ok(r.d?.find((p) => p.email === "joao@kianda.teste")?.casas?.[0]?.nome === "Kianda Ilha" && r.d.find((p) => p.email === "cozinha@kianda.teste")?.casas?.length === 0,
+  "a equipa mostra o estabelecimento de cada pessoa", JSON.stringify(r.d?.map((p) => [p.email, p.casas])));
+
+// posto num estabelecimento sem restaurante ligado; posto em dois, escolhe só entre os seus
+await dono.criarPub("establishment_members", [{ establishment_id: casa.TALAT, user_id: idBar, company_id: empresa }]);
+r = await bar.rpc("eu");
+ok(r.d?.casa?.id === casa.TALAT && r.d.activo === false && r.d.ja_configurado === false && r.d.papel === null, "quem foi posto num estabelecimento sem restaurante ligado vê-o por ligar", JSON.stringify(r.d));
+await dono.criarPub("establishment_members", [{ establishment_id: casa.TALAT, user_id: idJoao, company_id: empresa }]);
+r = await joao.rpc("eu");
+ok(r.d?.casas.length === 2 && r.d.preso_a_casas === true, "posto em dois estabelecimentos, o João pode trabalhar nos dois");
+ok(!(await joao.pub("establishment_select", { _establishment: casa.TALAT })).erro && (await joao.rpc("eu")).d?.casa?.id === casa.TALAT, "e escolhe só entre os seus");
+ok((await outro.rpc("eu")).d?.casas.length === 0 && ((await outro.verPub("establishments")).d ?? []).length === 0, "a outra empresa não vê estes estabelecimentos");
 
 console.log(`\n${passou} passaram, ${falhou} falharam`);
 process.exit(falhou ? 1 : 0);

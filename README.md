@@ -23,6 +23,7 @@ Regras que o código segue:
 - Depois de fechar a conta, a aplicação pede o envio do documento à AGT em segundo plano (`agt-submit-document`), como a Venda rápida; se falhar, a tarefa de reenvio do BOSS repete.
 - Os QR das mesas levam sempre o endereço de produção (`ENDERECO_PUBLICO`), porque ficam impressos.
 - O talão usa o gerador do BOSS, copiado para `lib/boss/` sem alterações (ver `lib/boss/LEIAME.md`).
+- Estabelecimentos (várias casas na mesma empresa, o mesmo NIF; migrações `20270116090000_restaurante_por_estabelecimento.sql` e `20270117090000_restaurante_equipa_por_estabelecimento.sql` do `appbossao`): uma empresa com estabelecimentos no BOSS pode ter um restaurante em cada um. As definições, as salas, as mesas, os pedidos e as contas ficam presos à casa (`establishment_id`; vazio = o restaurante da empresa, o de sempre); o menu, as estações e os papéis da equipa são da empresa, e cada casa só esconde um artigo ou dá-o por esgotado para si (`restaurante.menu_itens_casa`). Todas as funções e políticas trabalham «na casa em que a pessoa está» (`restaurante._casa`). É quem gere a empresa que põe cada pessoa no seu estabelecimento, **no BOSS** (Configurações › Estabelecimentos), e o restaurante só assume: o funcionário entra directamente no restaurante da casa em que foi posto e nunca escolhe; só escolhe quem gere a empresa (trabalha em todas) e quem foi posto em mais de uma (só entre as suas, `lib/casas.ts`, `components/EscolherCasa.tsx`); quem ainda não foi posto em nenhuma não entra («Ainda não está em nenhum estabelecimento»). A aplicação nunca escreve na equipa dos estabelecimentos: em Gestão › Equipa só mostra a casa de cada pessoa. A Factura-Recibo leva a casa do pedido e o talão imprime o nome, a morada e o telefone do estabelecimento, com o NIF da empresa. Numa empresa sem estabelecimentos nada disto aparece.
 - A demonstração dos comerciais é uma empresa normal do BOSS registada em `restaurante.demo` (nunca `companies.is_demo`, que é só da demonstração do BOSS), com uma conta por papel em `restaurante.demo_contas`. A base repõe-a sozinha de 30 em 30 minutos quando ninguém está a mexer (`_demo_manter`): senha, mesas, menu, equipa, vendas do dia e mesas em curso. A aplicação só mostra a faixa «Demonstração» e o botão «Repor agora» (`eu.demonstracao`, `demo_repor`).
 
 ## Ecrãs
@@ -55,9 +56,9 @@ npx next build
 `base-de-testes/` prepara uma base separada, nunca a do BOSS:
 
 1. `01_nucleo_boss_minimo.sql`: réplica mínima das tabelas e funções do BOSS de que o restaurante depende.
-2. A migração do restaurante (do repositório `appbossao`).
+2. As migrações do restaurante e dos módulos (do repositório `appbossao`), pela ordem das datas; `01b_estabelecimentos_minimo.sql` (réplica mínima dos estabelecimentos do BOSS) corre antes das duas do restaurante por estabelecimento.
 3. `02_dados_de_teste.sql`: duas empresas, utilizadores e produtos de exemplo.
-4. `provas.mjs`: as provas pela API, com logins reais (papéis, isolamento entre empresas, pedidos do cliente, código da visita, factura, talão, conta dividida, facturas separadas, balcão e fecho do dia).
+4. `provas.mjs`: as provas pela API, com logins reais (papéis, isolamento entre empresas, pedidos do cliente, código da visita, factura, talão, conta dividida, facturas separadas, balcão, fecho do dia e um restaurante por estabelecimento).
 
 ```bash
 URL=https://<projecto>.supabase.co CHAVE=<chave publicável> SENHA=<senha de teste> node base-de-testes/provas.mjs

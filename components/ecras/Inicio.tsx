@@ -3,6 +3,7 @@ import { useRouter } from "next/navigation";
 import { useEffect } from "react";
 import { useSessao } from "@/lib/sessao";
 import { Carregar, inicioDe } from "@/components/Moldura";
+import { precisaEscolherCasa } from "@/lib/casas";
 
 /** A raiz leva cada pessoa ao seu ecrã: sala, cozinha, bar, configuração ou login. */
 export function Inicio() {
@@ -10,7 +11,8 @@ export function Inicio() {
   const router = useRouter();
   const destino =
     estado.fase === "sem_sessao" ? "/entrar"
-    : estado.fase === "pronto" ? (estado.eu.activo && estado.eu.papel ? inicioDe(estado.eu) : estado.eu.gere_empresa ? "/configurar" : "/sala")
+    // Com estabelecimentos e nenhum escolhido, a sala pergunta primeiro em que casa a pessoa está.
+    : estado.fase === "pronto" ? (estado.eu.activo && estado.eu.papel ? inicioDe(estado.eu) : estado.eu.gere_empresa && !precisaEscolherCasa(estado.eu) ? "/configurar" : "/sala")
     : estado.fase === "erro" ? "/sala"
     : null;
   useEffect(() => {

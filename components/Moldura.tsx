@@ -7,7 +7,9 @@ import { LogOut } from "lucide-react";
 import { BASE_DE_TESTES, PLANOS_DO_BOSS } from "@/lib/config";
 import { PAPEL } from "@/lib/formato";
 import { useSessao } from "@/lib/sessao";
+import { podeMudarDeCasa, precisaEscolherCasa, semEstabelecimento } from "@/lib/casas";
 import type { Eu, Papel } from "@/lib/tipos";
+import { BotaoCasa, ListaDeCasas } from "./EscolherCasa";
 
 export function Carregar({ texto = "A carregar…" }: { texto?: string }) {
   return <div className="flex min-h-[50vh] items-center justify-center text-sm text-muted" role="status">{texto}</div>;
@@ -66,7 +68,11 @@ export function Moldura({ papeis, children }: { papeis: Papel[]; children: (eu: 
 
   // Sem sessão, ou com o segundo factor por confirmar: o ecrã de entrada trata disso.
   const semSessao = estado.fase === "sem_sessao" || estado.fase === "codigo" || estado.fase === "activar_factor";
-  const porConfigurar = estado.fase === "pronto" && !estado.eu.activo && estado.eu.gere_empresa;
+  // Empresa com estabelecimentos: o funcionário entra no restaurante da casa em que foi posto no BOSS. Só escolhe
+  // quem gere a empresa e quem foi posto em mais de uma; quem ainda não foi posto em nenhuma não entra.
+  const semCasa = estado.fase === "pronto" && semEstabelecimento(estado.eu);
+  const escolherCasa = estado.fase === "pronto" && !semCasa && precisaEscolherCasa(estado.eu);
+  const porConfigurar = estado.fase === "pronto" && !escolherCasa && !estado.eu.activo && estado.eu.gere_empresa;
   useEffect(() => {
     if (semSessao) router.replace("/entrar");
     else if (porConfigurar) router.replace("/configurar");
@@ -89,14 +95,39 @@ export function Moldura({ papeis, children }: { papeis: Papel[]; children: (eu: 
       </Aviso>
     );
   }
+  if (semCasa) {
+    return (
+      <Aviso
+        titulo="Ainda não está em nenhum estabelecimento"
+        texto={`${eu.empresa ?? "A empresa"} tem um restaurante em cada estabelecimento. Peça a quem gere a empresa para o pôr na equipa do estabelecimento onde trabalha, no BOSS, em Configurações › Estabelecimentos.`}
+      >
+        <button type="button" className="btn btn-primary" onClick={() => recarregar()}>Já me puseram: tentar de novo</button>
+        <button type="button" className="btn btn-ghost" onClick={sair}>Sair</button>
+      </Aviso>
+    );
+  }
+  if (escolherCasa) {
+    return (
+      <Aviso
+        titulo="Em que estabelecimento está?"
+        texto={eu.gere_empresa
+          ? `${eu.empresa ?? "A empresa"} tem um restaurante em cada estabelecimento. Escolha aquele que quer abrir.`
+          : "Está na equipa de mais de um estabelecimento. Escolha aquele em que está a trabalhar agora."}
+      >
+        <ListaDeCasas eu={eu} />
+        <button type="button" className="btn btn-ghost" onClick={sair}>Sair</button>
+      </Aviso>
+    );
+  }
   if (!eu.activo) {
     return (
       <Aviso
         titulo={eu.ja_configurado ? "Restaurante desligado" : "Restaurante por ligar"}
         texto={eu.ja_configurado
           ? `O BOSS Restaurante está desligado em ${eu.empresa}. O dono ou um gestor da empresa pode voltar a ligá-lo.`
-          : `O restaurante ainda não está ligado em ${eu.empresa}. Peça ao dono ou a um gestor da empresa para o ligar.`}
+          : `O restaurante ainda não está ligado em ${eu.casa?.nome ?? eu.empresa}. Peça ao dono ou a um gestor da empresa para o ligar.`}
       >
+        {podeMudarDeCasa(eu) && <ListaDeCasas eu={eu} />}
         <button type="button" className="btn btn-ghost" onClick={sair}>Sair</button>
       </Aviso>
     );
@@ -133,10 +164,13 @@ export function Moldura({ papeis, children }: { papeis: Papel[]; children: (eu: 
               <span className="block truncate text-xs leading-tight text-muted">{eu.nome} · {PAPEL[eu.papel]}</span>
             </span>
           </Link>
-          <button type="button" onClick={sair} className="btn btn-ghost btn-sm shrink-0" aria-label="Sair da conta">
-            <LogOut size={15} aria-hidden />
-            <span className="hidden sm:inline">Sair</span>
-          </button>
+          <span className="flex shrink-0 items-center gap-1">
+            {podeMudarDeCasa(eu) && <BotaoCasa eu={eu} />}
+            <button type="button" onClick={sair} className="btn btn-ghost btn-sm shrink-0" aria-label="Sair da conta">
+              <LogOut size={15} aria-hidden />
+              <span className="hidden sm:inline">Sair</span>
+            </button>
+          </span>
         </div>
         <Navegacao eu={eu} />
       </header>

@@ -21,7 +21,20 @@ export interface Eu {
   papel: Papel | null;
   restaurante: { nome: string; cliente_pode_pedir: boolean; pedidos_directos: boolean; codigo_visita: boolean; largura_talao: 58 | 80 } | null;
   estacoes: Estacao[];
+  /** Estabelecimento (casa) em que a pessoa está a trabalhar; nulo nas empresas sem estabelecimentos. */
+  casa?: Casa | null;
+  /** Está na equipa de um ou mais estabelecimentos e não gere a empresa: só trabalha neles. */
+  preso_a_casas?: boolean;
+  /** Estabelecimentos em que a pessoa pode trabalhar: os dela, ou todos para quem gere a empresa (vazio nas empresas sem estabelecimentos). */
+  casas?: (Casa & { configurado: boolean })[];
+  /** A empresa tem restaurantes por estabelecimento e esta pessoa ainda não foi posta em nenhum (no BOSS). */
+  sem_casa?: boolean;
+  /** A empresa tem um restaurante sem estabelecimento (o de antes de haver casas). */
+  restaurante_da_empresa?: boolean;
 }
+
+/** Estabelecimento da empresa no BOSS (Configurações › Estabelecimentos): cada um tem o seu restaurante. */
+export interface Casa { id: string; nome: string }
 
 export type EstadoPedido = "aberto" | "conta_pedida" | "fechado" | "anulado";
 

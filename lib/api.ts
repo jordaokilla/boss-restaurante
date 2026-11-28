@@ -1,6 +1,6 @@
 "use client";
 import { supabase, supabasePublico } from "./supabase";
-import type { Categoria, Conta, EntradaPublica, Escolha, EstadoPublico, Eu, Factura, Forma, MenuPublico, Pagamento, Pedido, Sala, Talao } from "./tipos";
+import type { Casa, Categoria, Conta, EntradaPublica, Escolha, EstadoPublico, Eu, Factura, Forma, MenuPublico, Pagamento, Pedido, Sala, Talao } from "./tipos";
 
 /** Mensagem para a pessoa: a da base (já em português) ou uma genérica quando a falha é de rede. */
 export function mensagem(err: unknown): string {
@@ -29,6 +29,12 @@ export const tabela = (nome: string) => supabase().schema("restaurante").from(no
 export async function desligarRestaurante(): Promise<void> {
   const { error } = await supabase().rpc("company_module_deactivate", { p_module: "restaurante" });
   if (error) throw error;
+}
+
+/** Escolhe o estabelecimento em que a pessoa está a trabalhar (a mesma escolha do BOSS). Nulo = o restaurante da empresa. */
+export async function escolherCasa(casa: string | null): Promise<void> {
+  const { error } = await supabase().rpc("establishment_select", { _establishment: casa });
+  if (error) throw new Error(mensagem(error));
 }
 
 export const api = {
@@ -62,7 +68,7 @@ export const api = {
   /** Só na empresa de demonstração: volta a pôr as mesas, o menu e os pedidos de exemplo. */
   demoRepor: () => rpc<Eu>("demo_repor"),
   cancelarPedido: (pedido: string) => rpc<void>("cancelar_pedido", { p_pedido: pedido }),
-  equipa: () => rpc<{ user_id: string; nome: string; email: string; gere_empresa: boolean; papel: string | null; activo: boolean }[]>("equipa_lista"),
+  equipa: () => rpc<{ user_id: string; nome: string; email: string; gere_empresa: boolean; papel: string | null; activo: boolean; casas?: Casa[] }[]>("equipa_lista"),
   produtosBoss: (texto?: string) =>
     rpc<{ product_id: string; nome: string; categoria: string | null; foto: string | null; preco: number }[]>("produtos_boss", { p_texto: texto ?? null }),
   fechoDoDia: (dia?: string) =>
