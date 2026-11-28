@@ -1,8 +1,8 @@
 -- RÉPLICA MÍNIMA DOS ESTABELECIMENTOS DO BOSS, SÓ PARA A BASE DE TESTES.
 -- Nunca correr na base do BOSS: lá vivem completos (migrações 20270114090000 a 20270115100000 do appbossao).
 -- Aqui estão as tabelas e as funções em que o restaurante toca, com os mesmos nomes: as casas, a equipa de cada
--- uma, a casa em que cada pessoa está a trabalhar e a casa de cada factura. Ficam de fora o piloto, os armazéns,
--- a regra que decide a casa de um documento do BOSS e as políticas de leitura das facturas por casa.
+-- uma, a casa em que cada pessoa está a trabalhar, a casa de cada factura e a de cada armazém. Ficam de fora o
+-- piloto, a regra que decide a casa de um documento do BOSS e as políticas de leitura das facturas por casa.
 -- Corre depois de 01_nucleo_boss_minimo.sql e antes das migrações do restaurante por estabelecimento.
 
 create table if not exists public.establishments (
@@ -52,6 +52,8 @@ create table if not exists public.establishment_selection (
 );
 
 alter table public.invoices add column if not exists establishment_id uuid references public.establishments (id);
+-- O armazém de uma casa (o restaurante de uma casa usa o dela, quando existe).
+alter table public.warehouses add column if not exists establishment_id uuid references public.establishments (id);
 
 alter table public.establishments enable row level security;
 alter table public.establishment_members enable row level security;
