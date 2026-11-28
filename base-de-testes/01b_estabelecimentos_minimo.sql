@@ -83,7 +83,8 @@ drop policy if exists "Owners and admins remove establishment members" on public
 create policy "Owners and admins remove establishment members" on public.establishment_members for delete to authenticated
   using (company_id = (select public.get_user_company_id((select auth.uid()))) and (select public.is_owner_or_manager((select auth.uid()))));
 
--- As funções são as do BOSS, iguais.
+-- As funções são as do BOSS, iguais (com a regra de 28/11/2026: só quem gere a empresa escolhe o estabelecimento;
+-- quem não está na equipa de nenhum não escolhe).
 create or replace function public.establishment_scope_of(_user uuid, _company uuid) returns uuid[]
 language sql stable security definer set search_path = '' as $$
   select case
@@ -121,7 +122,11 @@ begin
     from public.establishment_selection s
     join public.establishments e on e.id = s.establishment_id and e.company_id = _company and e.is_active
    where s.user_id = _user and s.company_id = _company
-     and (v_scope is null or s.establishment_id = any (v_scope));
+     and case
+           when v_scope is not null then s.establishment_id = any (v_scope)
+           -- Sem estabelecimentos seus, a escolha só vale para quem gere a empresa.
+           else public.get_user_company_id(_user) = _company and public.is_owner_or_manager(_user)
+         end;
   if v_house is not null then
     return v_house;
   end if;
@@ -142,18 +147,20 @@ declare
   v_uid     uuid := auth.uid();
   v_company uuid := public.get_user_company_id(auth.uid());
   v_scope   uuid[];
+  v_manages boolean;
 begin
   if v_uid is null or v_company is null
      or not exists (select 1 from public.establishments e where e.company_id = v_company) then
     return jsonb_build_object('restricted', false, 'houses', '[]'::jsonb, 'working', null);
   end if;
   v_scope := public.establishment_scope_of(v_uid, v_company);
+  v_manages := coalesce(public.is_owner_or_manager(v_uid), false);
   return jsonb_build_object(
     'restricted', v_scope is not null,
     'houses', coalesce((select jsonb_agg(e.id order by e.name)
                           from public.establishments e
                          where e.company_id = v_company and e.is_active
-                           and (v_scope is null or e.id = any (v_scope))), '[]'::jsonb),
+                           and case when v_scope is not null then e.id = any (v_scope) else v_manages end), '[]'::jsonb),
     'working', public.establishment_working_house(v_uid, v_company)
   );
 end $$;
@@ -180,6 +187,10 @@ begin
   v_scope := public.establishment_scope_of(v_uid, v_company);
   if v_scope is not null and not _establishment = any (v_scope) then
     raise exception 'Só pode trabalhar nos estabelecimentos em que está na equipa.' using errcode = '42501';
+  end if;
+  if v_scope is null and not coalesce(public.is_owner_or_manager(v_uid), false) then
+    raise exception 'Só quem gere a empresa escolhe o estabelecimento. Peça para o porem na equipa do estabelecimento onde trabalha.'
+      using errcode = '42501';
   end if;
   insert into public.establishment_selection (user_id, company_id, establishment_id)
   values (v_uid, v_company, _establishment)
