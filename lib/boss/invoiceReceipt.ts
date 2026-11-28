@@ -1,9 +1,10 @@
-// CÓPIA de appbossao (src/lib/invoiceReceipt.ts, só com os caminhos das importações mudados, commit 214ac98). Não alterar aqui: mudar no BOSS e copiar de novo.
+// CÓPIA de appbossao (src/lib/invoiceReceipt.ts, só com os caminhos das importações mudados, commit 492fe97). Não alterar aqui: mudar no BOSS e copiar de novo.
 import { displayDocumentNumber } from "./documentNumber";
 import { isQuoteDocument, isTransportDocument } from "./deliveryNote";
 import { VAT_EXEMPTION_MAP } from "./vat-exemptions";
 import { BOSS_AGT_CERTIFICATE } from "./certificate";
 import { agtQrDocumentNo, agtQrUrl } from "./agt-qr";
+import { documentIssuerContact, type DocumentEstablishment } from "./establishment-core";
 
 /** Largura do rolo da impressora térmica (talão de PDA). */
 export type ReceiptWidth = 80 | 58;
@@ -39,6 +40,8 @@ export interface ReceiptData {
   company?: { name?: string | null; nif?: string | null; address?: string | null } | null;
   settings?: { city?: string | null; phone?: string | null; agt_certificate_number?: string | null } | null;
   client?: { name?: string | null; nif?: string | null } | null;
+  /** Estabelecimento que emitiu o documento: a morada e o telefone do talão são os dele (vazio = os da empresa). */
+  establishment?: DocumentEstablishment | null;
   /** QR já convertido em data URL (vazio nas proformas, que não têm valor fiscal). */
   qrDataUrl?: string | null;
   /** Recibo: os documentos pagos e as notas de crédito abatidas (`credit`), com o valor sempre positivo. */
@@ -145,9 +148,11 @@ export function buildReceiptHtml(data: ReceiptData, width: ReceiptWidth = 80): s
   const totalQty = items.reduce((t, it) => t + (Number(it.quantity) || 0), 0);
 
   const retention = Number(invoice.retention_rate) || 0;
-  const address = company?.address ?? "";
-  const city = settings?.city && !address.toLowerCase().includes(settings.city.toLowerCase()) ? settings.city : "";
-  const head = [address, city, settings?.phone ? `Tel. ${settings.phone}` : ""].filter(Boolean).map((t) => `<div>${escapeHtml(t)}</div>`).join("");
+  // Num documento de um estabelecimento, a morada e o telefone são os do estabelecimento (documentIssuerContact).
+  const contact = documentIssuerContact(company, settings, data.establishment);
+  const address = contact.address;
+  const city = contact.city && !address.toLowerCase().includes(contact.city.toLowerCase()) ? contact.city : "";
+  const head = [address, city, contact.phone ? `Tel. ${contact.phone}` : ""].filter(Boolean).map((t) => `<div>${escapeHtml(t)}</div>`).join("");
 
   return `<!doctype html><html lang="pt"><head><meta charset="utf-8"><title>${escapeHtml(label)} ${escapeHtml(number)}</title>
 <style>
@@ -171,6 +176,7 @@ export function buildReceiptHtml(data: ReceiptData, width: ReceiptWidth = 80): s
 </style></head><body>
   <div class="center">
     <div class="name">${escapeHtml(company?.name || "")}</div>
+    ${contact.establishmentName ? `<div>${escapeHtml(contact.establishmentName)}</div>` : ""}
     ${company?.nif ? `<div>NIF ${escapeHtml(company.nif)}</div>` : ""}
     ${head}
   </div>

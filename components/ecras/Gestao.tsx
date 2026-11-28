@@ -3,8 +3,10 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import QRCode from "qrcode";
+import { Store } from "lucide-react";
 import { ENDERECO_PUBLICO } from "@/lib/config";
 import { api, mensagem, tabela, desligarRestaurante } from "@/lib/api";
+import { EQUIPA_NO_BOSS, ordemNaEquipa } from "@/lib/casas";
 import { FORMA, kz, PAPEL } from "@/lib/formato";
 import { useSessao } from "@/lib/sessao";
 import type { Estacao, Eu, Forma, Papel } from "@/lib/tipos";
@@ -186,7 +188,7 @@ type ProdutoBoss = { product_id: string; nome: string; categoria: string | null;
 function Menu({ eu }: { eu: Eu }) {
   const [cats, setCats] = useState<CatRow[] | null>(null);
   const [itens, setItens] = useState<ItemRow[]>([]);
-  const [nomes, setNomes] = useState<Record<string, { nome: string; preco: number }>>({});
+  const [nomes, setNomes] = useState<Record<string, { nome: string; preco: number; visivel: boolean; esgotado: boolean }>>({});
   const [erro, setErro] = useState<string | null>(null);
   const [ocupado, setOcupado] = useState(false);
   const [novaCat, setNovaCat] = useState({ nome: "", estacao: eu.estacoes[0]?.id ?? "" });
@@ -203,7 +205,8 @@ function Menu({ eu }: { eu: Eu }) {
     if (c.error || i.error) return setErro(mensagem(c.error ?? i.error));
     setCats(c.data as CatRow[]);
     setItens(i.data as ItemRow[]);
-    setNomes(Object.fromEntries(m.flatMap((x) => x.itens).map((a) => [a.id, { nome: a.nome, preco: a.preco }])));
+    // `api.menu()` já traz o estado de cada artigo nesta casa (o que a casa mudou por cima do menu da empresa).
+    setNomes(Object.fromEntries(m.flatMap((x) => x.itens).map((a) => [a.id, { nome: a.nome, preco: a.preco, visivel: a.visivel, esgotado: a.esgotado }])));
   }, []);
   useEffect(() => {
     const t = setTimeout(carregar, 0);
@@ -231,6 +234,14 @@ function Menu({ eu }: { eu: Eu }) {
   }
 
   if (!cats) return erro ? <Erro texto={erro} /> : <Carregar />;
+  // O menu é da empresa. Num estabelecimento, mostrar no menu do cliente e dar por esgotado valem só para ele
+  // (restaurante.menu_itens_casa); sem estabelecimentos, mudam o próprio artigo, como sempre.
+  const casa = eu.casa ?? null;
+  const estadoDe = (i: ItemRow, campo: "visivel" | "esgotado") => (casa ? nomes[i.id]?.[campo] ?? i[campo] : i[campo]);
+  const mudarEstado = (i: ItemRow, campo: "visivel" | "esgotado", v: boolean) =>
+    casa
+      ? tabela("menu_itens_casa").upsert({ establishment_id: casa.id, item_id: i.id, company_id: eu.company_id, [campo]: v }, { onConflict: "establishment_id,item_id" })
+      : tabela("menu_itens").update({ [campo]: v }).eq("id", i.id);
   const estacaoDe = (id: string | null) => eu.estacoes.find((e) => e.id === id)?.nome ?? "Sem estação";
   const filtrados = (produtos ?? []).filter((p) => !procura.trim() || p.nome.toLowerCase().includes(procura.trim().toLowerCase()));
 
@@ -239,6 +250,7 @@ function Menu({ eu }: { eu: Eu }) {
       <p className="max-w-xl text-sm text-muted">
         O menu é feito com os produtos que a empresa já tem no BOSS: o nome, o preço e a fotografia vêm de lá. Aqui escolhe o que aparece,
         em que categoria e para onde vai cada pedido (cozinha ou bar).
+        {casa && ` O menu é igual em todos os estabelecimentos; «No menu do cliente» e «Esgotado» valem só para ${casa.nome}.`}
       </p>
       <Erro texto={erro} />
       {cats.length === 0 && <p className="card p-5 text-[15px] text-muted">Comece por criar uma categoria (Pratos, Bebidas…) e depois junte-lhe produtos do BOSS.</p>}
@@ -259,8 +271,8 @@ function Menu({ eu }: { eu: Eu }) {
                   <li key={i.id} className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 py-2.5">
                     <span className="min-w-0 text-[15px]"><strong className="font-semibold">{nomes[i.id]?.nome ?? "…"}</strong> <span className="text-muted">· {kz(nomes[i.id]?.preco)}</span></span>
                     <span className="flex flex-wrap items-center gap-x-4 gap-y-2 text-xs text-muted">
-                      <span className="inline-flex items-center gap-2">No menu do cliente<Interruptor ligado={i.visivel} rotulo={`Mostrar ${nomes[i.id]?.nome ?? "artigo"} no menu do cliente`} desligado={ocupado} onMudar={(v) => correr(() => tabela("menu_itens").update({ visivel: v }).eq("id", i.id))} /></span>
-                      <span className="inline-flex items-center gap-2">Esgotado<Interruptor ligado={i.esgotado} rotulo={`Marcar ${nomes[i.id]?.nome ?? "artigo"} como esgotado`} desligado={ocupado} onMudar={(v) => correr(() => tabela("menu_itens").update({ esgotado: v }).eq("id", i.id))} /></span>
+                      <span className="inline-flex items-center gap-2">No menu do cliente<Interruptor ligado={estadoDe(i, "visivel")} rotulo={`Mostrar ${nomes[i.id]?.nome ?? "artigo"} no menu do cliente`} desligado={ocupado} onMudar={(v) => correr(() => mudarEstado(i, "visivel", v))} /></span>
+                      <span className="inline-flex items-center gap-2">Esgotado<Interruptor ligado={estadoDe(i, "esgotado")} rotulo={`Marcar ${nomes[i.id]?.nome ?? "artigo"} como esgotado`} desligado={ocupado} onMudar={(v) => correr(() => mudarEstado(i, "esgotado", v))} /></span>
                       <button type="button" className="btn btn-ghost btn-sm" disabled={ocupado} onClick={() => correr(() => tabela("menu_itens").delete().eq("id", i.id))}>Tirar</button>
                     </span>
                   </li>
@@ -357,19 +369,35 @@ function Equipa({ eu }: { eu: Eu }) {
   }
 
   if (!lista) return erro ? <Erro texto={erro} /> : <Carregar />;
+  // Com estabelecimentos, cada pessoa trabalha naquele em que quem gere a empresa a pôs, no BOSS. Aqui só se vê.
+  const casa = eu.casa ?? null;
+  const pessoas = casa ? [...lista].sort((a, b) => ordemNaEquipa(a, casa) - ordemNaEquipa(b, casa)) : lista;
   return (
     <div className="space-y-4">
       <p className="max-w-xl text-sm text-muted">
         As pessoas são as contas da empresa no BOSS. Aqui escolhe o que cada uma faz no restaurante. Para criar uma conta nova,
         convide a pessoa em app.boss.ao.
+        {casa && (
+          <>
+            {" "}Cada pessoa entra directamente no restaurante do estabelecimento em que está: quem gere a empresa põe-na lá no BOSS, em{" "}
+            {eu.gere_empresa
+              ? <a className="font-semibold text-ink underline" href={EQUIPA_NO_BOSS} target="_blank" rel="noreferrer">Configurações › Estabelecimentos</a>
+              : "Configurações › Estabelecimentos"}.
+          </>
+        )}
       </p>
       <Erro texto={erro} />
       <ul className="card divide-y divide-divider px-4">
-        {lista.map((p) => (
+        {pessoas.map((p) => (
           <li key={p.user_id} className="flex flex-wrap items-center justify-between gap-3 py-3">
             <span className="min-w-0">
               <span className="block truncate text-[15px] font-semibold">{p.nome}</span>
               <span className="block truncate text-xs text-muted">{p.email}</span>
+              {casa && !p.gere_empresa && (
+                (p.casas ?? []).length > 0
+                  ? <span className="mt-0.5 flex items-center gap-1 text-xs text-muted"><Store size={12} aria-hidden className="shrink-0" /><span className="truncate">{(p.casas ?? []).map((c) => c.nome).join(", ")}</span></span>
+                  : <span className="mt-0.5 block text-xs font-medium text-danger">Sem estabelecimento: ainda não pode entrar</span>
+              )}
             </span>
             {p.gere_empresa ? (
               <span className="pill">Gerente · gere a empresa no BOSS</span>

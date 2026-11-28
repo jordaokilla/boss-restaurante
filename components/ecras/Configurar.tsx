@@ -5,6 +5,8 @@ import { useEffect, useState } from "react";
 import { api, mensagem } from "@/lib/api";
 import { PLANOS_DO_BOSS } from "@/lib/config";
 import { useSessao } from "@/lib/sessao";
+import { podeMudarDeCasa, precisaEscolherCasa } from "@/lib/casas";
+import { ListaDeCasas } from "@/components/EscolherCasa";
 import { Aviso, Carregar } from "@/components/Moldura";
 
 /** Primeira vez: o dono ou um gestor liga o restaurante na sua empresa. */
@@ -17,12 +19,15 @@ export function Configurar() {
 
   const semSessao = estado.fase === "sem_sessao";
   const jaLigado = estado.fase === "pronto" && estado.eu.activo;
+  // Com estabelecimentos, liga-se o restaurante de uma casa: sem casa escolhida, a sala pergunta qual é.
+  const semCasa = estado.fase === "pronto" && precisaEscolherCasa(estado.eu);
   useEffect(() => {
     if (semSessao) router.replace("/entrar");
     else if (jaLigado) router.replace("/gestao");
-  }, [semSessao, jaLigado, router]);
+    else if (semCasa) router.replace("/sala");
+  }, [semSessao, jaLigado, semCasa, router]);
 
-  if (estado.fase !== "pronto" || jaLigado) return <Carregar />;
+  if (estado.fase !== "pronto" || jaLigado || semCasa) return <Carregar />;
   const eu = estado.eu;
   if (!eu.gere_empresa) {
     return (
@@ -40,7 +45,9 @@ export function Configurar() {
       </Aviso>
     );
   }
-  const valor = nome ?? eu.empresa ?? "";
+  // Num estabelecimento, o restaurante leva o nome dele por omissão.
+  const onde = eu.casa?.nome ?? eu.empresa;
+  const valor = nome ?? onde ?? "";
   const voltar = eu.ja_configurado;
 
   return (
@@ -67,14 +74,15 @@ export function Configurar() {
         </div>
         {voltar ? (
           <p className="text-[15px] text-muted">
-            O restaurante de <strong className="text-ink">{eu.empresa}</strong> está desligado. Ao ligar, volta tudo como estava:
+            O restaurante de <strong className="text-ink">{onde}</strong> está desligado. Ao ligar, volta tudo como estava:
             mesas, menu, equipa e vendas.
           </p>
         ) : (
           <>
             <p className="text-[15px] text-muted">
-              O restaurante fica ligado a <strong className="text-ink">{eu.empresa}</strong>: usa os produtos, os clientes e a facturação
+              O restaurante fica ligado a <strong className="text-ink">{onde}</strong>: usa os produtos, os clientes e a facturação
               que a empresa já tem no BOSS. A seguir cria as mesas, monta o menu e dá um papel a cada pessoa da equipa.
+              {eu.casa && " As mesas, os pedidos e as contas ficam só deste estabelecimento; o menu é o da empresa."}
             </p>
             <div>
               <label className="field-label" htmlFor="c-nome">Nome do restaurante</label>
@@ -85,6 +93,12 @@ export function Configurar() {
         )}
         {erro && <p className="text-sm font-medium text-danger" role="alert">{erro}</p>}
         <button type="submit" className="btn btn-primary w-full" disabled={ocupado || !valor.trim()}>{ocupado ? "A ligar…" : voltar ? "Voltar a ligar" : "Ligar o restaurante"}</button>
+        {podeMudarDeCasa(eu) && (
+          <details className="text-sm">
+            <summary className="cursor-pointer text-muted">Mudar de estabelecimento</summary>
+            <div className="mt-2"><ListaDeCasas eu={eu} /></div>
+          </details>
+        )}
         <button type="button" className="btn btn-ghost w-full" onClick={sair}>Sair</button>
       </form>
     </div>
