@@ -463,9 +463,9 @@ const mesaIlha = r.d?.[0];
 ok(mesaIlha?.establishment_id === casa.ILHA, "a mesa «1» da Ilha convive com a mesa «1» do restaurante da empresa", JSON.stringify(r));
 
 // quem não foi posto em nenhum estabelecimento não escolhe
-await joao.pub("establishment_select", { _establishment: casa.ILHA });
+ok(/gere a empresa/.test((await joao.pub("establishment_select", { _establishment: casa.ILHA })).erro ?? ""), "quem não foi posto em nenhum estabelecimento não escolhe: o BOSS recusa a escolha");
 r = await joao.rpc("eu");
-ok(r.d?.casa === null && r.d.casas.length === 0 && r.d.sem_casa === true, "quem não foi posto em nenhum estabelecimento não escolhe: o restaurante ignora a escolha dele", JSON.stringify(r.d));
+ok(r.d?.casa === null && r.d.casas.length === 0 && r.d.sem_casa === true, "e o restaurante não o deixa entrar em nenhum estabelecimento", JSON.stringify(r.d));
 ok(!!(await joao.rpc("abrir_mesa", { p_mesa: mesaIlha.id })).erro, "e não abre mesas da Ilha");
 ok((await joao.rpc("sala")).d?.areas?.flatMap((a) => a.mesas).length === 6, "continua só no restaurante da empresa");
 ok(!!(await joao.criarPub("establishment_members", [{ establishment_id: casa.ILHA, user_id: idJoao, company_id: empresa }])).erro, "ninguém se põe a si próprio num estabelecimento");
